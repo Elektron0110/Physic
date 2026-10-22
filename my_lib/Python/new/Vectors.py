@@ -133,6 +133,15 @@ class Vector:
             result = result * self
         return result
 
+    def __truediv__(self, other) -> Self:
+        other = self._coerce(other)
+        if other is NotImplemented:
+            return NotImplemented
+        self._ensure_polar()
+        other._ensure_polar()
+        return Vector([self.r / other.r,
+                  (self.θ - other.θ) % 360])
+
 
 if __name__ == '__main__':
     v = Vector((2, 3))
