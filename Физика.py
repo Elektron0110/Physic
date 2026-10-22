@@ -141,6 +141,9 @@ class Acceleration(Velocity):
             self._vector *= other
             return self
 
+class Strength(Base):
+    dimension = {'ru': 'Н', 'en': 'N'}
+
 
 @once
 class Model:
@@ -186,6 +189,7 @@ class Body:
         self.temp: Temperature = Temperature(kwargs.get('temp', 20), model)
         self.C: Specific_Heat = Specific_Heat(kwargs.get('C'), model)
         self.coordinates = Vector(kwargs.get('coordinates', (0, 0)))
+        self.a: Acceleration = Acceleration(kwargs.get('a', [0, 0]))
         self.__name__ = type(self).__name__
 
     def move(self, to=None, around=None):
@@ -219,6 +223,8 @@ class Body:
                 _value._value / (self.m._value * self.C._value), self.Model)
         elif isinstance(_value, Mass):
             self.m = self.m + _value
+        elif isinstance(_value, Strength):
+            self.a = self.a + (_value/self.m)
         else:
             return NotImplemented
         return self
