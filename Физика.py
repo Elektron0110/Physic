@@ -150,7 +150,7 @@ class Force(Velocity):
             return Acceleration([self._vector.r / _value._value, self._vector.θ])
         elif isinstance(_value, (int, float)) or isinstance(_value, Vector) or issubclass(type(_value), Vector):
             _value = Vector()._coerce(_value)
-            self._vector.ensure_polar()
+            self._vector._ensure_polar()
             self._vector.r /= _value
             return self
 
@@ -287,6 +287,7 @@ def inter(x, y, z, w, step=1, start=-10, stop=10, finish: int = None):
         rs.append(value)
 
         if finish is not None and value <= finish:
+            ns = ns[:len(rs)]
             break
     if finish is not None:
         return (ns, rs), n
