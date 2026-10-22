@@ -68,7 +68,7 @@ class Volume(Base):
     dimension = {'ru': 'м³', 'en': 'm³'}
 
 
-class Плотность(Base):
+class Density(Base):
     dimension = {'ru': 'кг/м³', 'en': 'kg/m³'}
 
 
@@ -168,7 +168,7 @@ class Model:
 
 class Body:
     m: Mass
-    ρ: Плотность
+    ρ: Density
     V: Volume
     Vel: Velosity
     temp: Temperature
@@ -179,7 +179,7 @@ class Body:
     def __init__(self, model: Model = None, *args, **kwargs):
         self.Model = model if model is not None else Model()
         self.m: Mass = Mass(kwargs.get('m', 1), model)
-        self.ρ: Плотность = Плотность(kwargs.get('ρ'), model)
+        self.ρ: Density = Density(kwargs.get('ρ'), model)
         self.V: Volume = Volume(kwargs.get('V'), model)
         self.Vel: Velosity = Velosity(kwargs.get('Vel', [0, 0]), model)
         self.temp: Temperature = Temperature(kwargs.get('temp', 20), model)
