@@ -80,7 +80,7 @@ class Time(Base):
     dimension = {'ru': 'с', 'en': 's'}
 
 
-class Veloсity:
+class Velocity:
     dimension = {'ru': 'м/с', 'en': 'm/s'}
 
     def __init__(self, value=[0, 0], model: 'Model' = None):
@@ -99,7 +99,7 @@ class Veloсity:
         return self._vector.r
 
     def __add__(self, value):
-        if isinstance(value, Veloсity):
+        if isinstance(value, Velocity):
             self._vector += value._vector
             return self
         if isinstance(value, Vector):
@@ -109,7 +109,7 @@ class Veloсity:
     __radd__ = __add__
 
     def __mul__(self, value):
-        if isinstance(value, Veloсity):
+        if isinstance(value, Velocity):
             self._vector *= value._vector
             return self
         if isinstance(value, Vector):
@@ -126,17 +126,17 @@ class Veloсity:
 
     def copy(self):
         self._vector._ensure_polar()
-        return Veloсity([self._vector.r, self._vector.θ], self.Model)
+        return Velocity([self._vector.r, self._vector.θ], self.Model)
 
 
-class Acсeleration(Veloсity):
+class Acceleration(Velocity):
     dimension = {'ru': 'м/с²', 'en': 'm/s²'}
 
     def __mul__(self, other) -> Self:
         if isinstance(other, Time):
             c = self._vector
             c._ensure_polar()
-            return Veloсity([c.r*other._value, c.θ], self.Model)
+            return Velocity([c.r*other._value, c.θ], self.Model)
         elif isinstance(other, (int, float)):
             self._vector *= other
             return self
@@ -144,13 +144,13 @@ class Acсeleration(Veloсity):
 
 @once
 class Model:
-    k, lang, g, ground, play, speed = 5, 'ru', Acсeleration(
+    k, lang, g, ground, play, speed = 5, 'ru', Acceleration(
         [9.81, -90], Self), 0, False, 1
     a = ('k', 'lang', 'g', 'ground', 'play', 'speed')
 
     def __init__(self, **kwargs):
         self.k = kwargs.get('k', 5)
-        self.g = Acсeleration([kwargs.get('g', 9.81), -90], self)
+        self.g = Acceleration([kwargs.get('g', 9.81), -90], self)
         self.speed = kwargs.get('speed', 1)
         self.lang = kwargs.get('lang', 'ru')
         self.ground = kwargs.get('ground', 0)
@@ -170,18 +170,19 @@ class Body:
     m: Mass
     ρ: Density
     V: Volume
-    Vel: Veloсity
+    Vel: Velocity
     temp: Temperature
     C: Specific_Heat
     coordinates: Vector
-    __el__ = ('m', 'ρ', 'V', 'temp', 'C', 'Vel', 'coordinates')
+    a: Acceleration
+    __el__ = ('m', 'ρ', 'V', 'temp', 'C', 'Vel', 'coordinates', 'a')
 
     def __init__(self, model: Model = None, *args, **kwargs):
         self.Model = model if model is not None else Model()
         self.m: Mass = Mass(kwargs.get('m', 1), model)
         self.ρ: Density = Density(kwargs.get('ρ'), model)
         self.V: Volume = Volume(kwargs.get('V'), model)
-        self.Vel: Veloсity = Veloсity(kwargs.get('Vel', [0, 0]), model)
+        self.Vel: Velocity = Velocity(kwargs.get('Vel', [0, 0]), model)
         self.temp: Temperature = Temperature(kwargs.get('temp', 20), model)
         self.C: Specific_Heat = Specific_Heat(kwargs.get('C'), model)
         self.coordinates = Vector(kwargs.get('coordinates', (0, 0)))
@@ -298,7 +299,7 @@ print(Q)						# 5
 sphere += Q
 print(sphere)					# 6
 print(sphere.U)					# 7
-launch = Veloсity([2500/3.6, 30])
+launch = Velocity([2500/3.6, 30])
 print(launch)					# 8
 sphere.Vel = launch
 print(sphere)					# 9
@@ -309,7 +310,7 @@ ms = 0.05
 c = 6
 
 for i in [90/c*n for n in range(c+1)]:
-    sphere.Vel = Veloсity([2500/3.6, i])
+    sphere.Vel = Velocity([2500/3.6, i])
     y = inter(sphere, 'time', Time, 'coordinates.y', start=mst, stop=msp, step=ms, finish=0)
     x = inter(sphere, 'time', Time, 'coordinates.x', start=mst, stop=y[1], step=ms)
     plt.plot(x[1], y[0][1])
