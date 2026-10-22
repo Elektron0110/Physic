@@ -141,7 +141,7 @@ class Acceleration(Velocity):
             self._vector *= other
             return self
 
-class Strength(Base):
+class Strength(Vector):
     dimension = {'ru': 'Н', 'en': 'N'}
 
 
@@ -309,6 +309,8 @@ launch = Velocity([2500/3.6, 30])
 print(launch)					# 8
 sphere.Vel = launch
 print(sphere)					# 9
+sphere + Strength()
+print(sphere)					# 10
 
 msp = 1000
 mst = 0
@@ -324,6 +326,6 @@ plt.show()
 
 
 time = Time(1)
-print(time)						# 10
+print(time)						# 11
 sphere.time(time)
-print(sphere)					# 11
+print(sphere)					# 12
