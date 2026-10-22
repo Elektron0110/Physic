@@ -303,43 +303,16 @@ print(launch)					# 8
 sphere.Vel = launch
 print(sphere)					# 9
 
-mt = 1000
+msp = 1000
+mst = 0
+ms = 0.05
+c = 6
 
-# print(max(inter(sphere, 'time', Time, 'coordinates.x', start=0, stop=100, step=1)[1]))
-y = inter(sphere, 'time', Time, 'coordinates.y', start=0, stop=mt, step=1, finish=0)
-x = inter(sphere, 'time', Time, 'coordinates.x', start=0, stop=y[1], step=1)
-plt.plot(x[1], y[0][1])
-
-sphere.Vel = Velosity([2500/3.6, 60])
-y = inter(sphere, 'time', Time, 'coordinates.y', start=0, stop=mt, step=1, finish=0)
-x = inter(sphere, 'time', Time, 'coordinates.x', start=0, stop=y[1], step=1)
-plt.plot(x[1], y[0][1])
-
-sphere.Vel = Velosity([2500/3.6, 90])
-y = inter(sphere, 'time', Time, 'coordinates.y', start=0, stop=mt, step=1, finish=0)
-x = inter(sphere, 'time', Time, 'coordinates.x', start=0, stop=y[1], step=1)
-plt.plot(x[1], y[0][1])
-
-sphere.Vel = Velosity([2500/3.6, 15])
-y = inter(sphere, 'time', Time, 'coordinates.y', start=0, stop=mt, step=1, finish=0)
-x = inter(sphere, 'time', Time, 'coordinates.x', start=0, stop=y[1], step=1)
-plt.plot(x[1], y[0][1])
-
-sphere.Vel = Velosity([2500/3.6, 75])
-y = inter(sphere, 'time', Time, 'coordinates.y', start=0, stop=mt, step=1, finish=0)
-x = inter(sphere, 'time', Time, 'coordinates.x', start=0, stop=y[1], step=1)
-plt.plot(x[1], y[0][1])
-
-sphere.Vel = Velosity([2500/3.6, 0])
-y = inter(sphere, 'time', Time, 'coordinates.y', start=0, stop=mt, step=1, finish=0)
-x = inter(sphere, 'time', Time, 'coordinates.x', start=0, stop=y[1], step=1)
-plt.plot(x[1], y[0][1])
-
-sphere.Vel = Velosity([2500/3.6, 45])
-y = inter(sphere, 'time', Time, 'coordinates.y', start=0, stop=mt, step=1, finish=0)
-x = inter(sphere, 'time', Time, 'coordinates.x', start=0, stop=y[1], step=1)
-plt.plot(x[1], y[0][1])
-
+for i in [90/c*n for n in range(c+1)]:
+    sphere.Vel = Velosity([2500/3.6, i])
+    y = inter(sphere, 'time', Time, 'coordinates.y', start=mst, stop=msp, step=ms, finish=0)
+    x = inter(sphere, 'time', Time, 'coordinates.x', start=mst, stop=y[1], step=ms)
+    plt.plot(x[1], y[0][1])
 plt.show()
 
 
