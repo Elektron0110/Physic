@@ -96,7 +96,7 @@ class Velocity:
     @property
     def _value(self):
         self._vector._ensure_polar()
-        return self._vector.r
+        return self._vector.r if self._vector.r else None
 
     def __add__(self, value):
         if isinstance(value, Velocity):
@@ -122,7 +122,7 @@ class Velocity:
 
     def __repr__(self) -> str:
         self._vector._ensure_polar()
-        return f'{round(self._value, self.Model.k)} {self.dimension[self.Model.lang]}'
+        return f'{round(self._value, self.Model.k) if self._value else self._value} {self.dimension[self.Model.lang]}'
 
     def copy(self):
         self._vector._ensure_polar()
@@ -141,8 +141,18 @@ class Acceleration(Velocity):
             self._vector *= other
             return self
 
-class Strength(Vector):
+class Force(Velocity):
     dimension = {'ru': 'Н', 'en': 'N'}
+
+    def __truediv__(self, _value):
+        if isinstance(_value, Mass):
+            self._vector._ensure_polar()
+            return Acceleration([self._vector.r / _value._value, self._vector.θ])
+        elif isinstance(_value, (int, float)) or isinstance(_value, Vector) or issubclass(type(_value), Vector):
+            _value = Vector()._coerce(_value)
+            self._vector.ensure_polar()
+            self._vector.r /= _value
+            return self
 
 
 @once
@@ -223,7 +233,7 @@ class Body:
                 _value._value / (self.m._value * self.C._value), self.Model)
         elif isinstance(_value, Mass):
             self.m = self.m + _value
-        elif isinstance(_value, Strength):
+        elif isinstance(_value, Force):
             self.a = self.a + (_value/self.m)
         else:
             return NotImplemented
@@ -309,8 +319,10 @@ launch = Velocity([2500/3.6, 30])
 print(launch)					# 8
 sphere.Vel = launch
 print(sphere)					# 9
-sphere + Strength()
-print(sphere)					# 10
+F = Force([50, 90])
+print(F)						# 10
+sphere += F
+print(sphere)					# 11
 
 msp = 1000
 mst = 0
@@ -326,6 +338,6 @@ plt.show()
 
 
 time = Time(1)
-print(time)						# 11
+print(time)						# 12
 sphere.time(time)
-print(sphere)					# 12
+print(sphere)					# 13
