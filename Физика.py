@@ -158,7 +158,7 @@ class Force(Velocity):
 @once
 class Model:
     k, lang, g, ground, play, speed, ρ = 5, 'ru', Acceleration(
-        [9.81, -90], Self), 0, False, 1, 
+        [9.81, -90], Self), 0, False, 1, Density(1.204, Self)
     a = ('k', 'lang', 'g', 'ground', 'play', 'speed', 'ρ')
 
     def __init__(self, **kwargs):
@@ -168,7 +168,7 @@ class Model:
         self.lang = kwargs.get('lang', 'ru')
         self.ground = kwargs.get('ground', 0)
         self.play = kwargs.get('play', False)
-        self.ρ = Density(kwargs.get('ρ'), self)
+        self.ρ = Density(kwargs.get('ρ', 1.204), self)
 
     def __repr__(self) -> str:
         parts = []
