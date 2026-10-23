@@ -96,9 +96,13 @@ class Velocity:
         self.__name__ = type(self).__name__
 
     @property
-    def x(self): return self._vector.x
+    def x(self):
+        self._vector._ensure_coord()
+        return self._vector.x
     @property
-    def y(self): return self._vector.y
+    def y(self):
+        self._vector._ensure_coord()
+        return self._vector.y
 
     @property
     def _value(self):
@@ -167,8 +171,8 @@ class Force(Velocity):
             self._vector.r /= _value
             return self
 
-class Импульс(Velocity):
-    dimension = {'ru': 'Н', 'en': 'N'}
+class Impulse(Velocity):
+    dimension = {'ru': 'кг*м/с', 'en': 'kg*m/s'}
 
     def __truediv__(self, _value):
         if isinstance(_value, Mass):
@@ -215,7 +219,7 @@ class Body:
     C: Specific_Heat
     coordinates: Vector
     a: Acceleration
-    p: Импульс
+    p: Impulse
     __el__ = ('m', 'ρ', 'V', 'temp', 'C', 'Vel', 'coordinates', 'a', 'p')
 
     def __init__(self, model: Model = None, *args, **kwargs):
@@ -228,7 +232,7 @@ class Body:
         self.C: Specific_Heat = Specific_Heat(kwargs.get('C'))
         self.coordinates = Vector(kwargs.get('coordinates', (0, 0)))
         self.a: Acceleration = Acceleration(kwargs.get('a', [0, 0]))
-        self.p: Импульс = Импульс(kwargs.get('p', [0, 0]))
+        self.p: Impulse = Impulse(kwargs.get('p', [0, 0]))
         self.__name__ = type(self).__name__
 
     def move(self, to=None, around=None):
@@ -277,14 +281,14 @@ class Body:
         return Energy(self.m._value * self.C._value * t)
 
     def time(self, time=Time(1.0)):
-        value = time if isinstance(time, Time) else Time(value)
+        value = time if isinstance(time, Time) else Time(time)
         self.Vel._vector._ensure_coord()
         self.coordinates._ensure_coord()
         self.coordinates.x = self.coordinates.x + \
             (self.Vel._vector.x*value)._value
         self.coordinates.y = self.coordinates.y + \
-            (self.Vel._vector.y*value)._value - ((self.a+self.Model.g)*value*value)/2
-        self.Vel += self.Model.g*value
+            (self.Vel._vector.y*value)._value - ((self.a.y+self.Model.g.y)*value*value)/2
+        self.Vel += (self.a+self.Model.g)*value
         if self.Model.play:
             sleep(time._value/self.Model.speed)
 
