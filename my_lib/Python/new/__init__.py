@@ -75,7 +75,7 @@ def is_sublist(this: Iterable, into: Iterable, t: Literal['bool'] | Literal['lis
 	elif t == 'bool': return False not in [i in into for i in this]
 	else: raise ValueError(f"Value of t must be 'bool' or 'list', not {t}.")
 
-def once(cls):
+def singleton(cls):
 	my_class = ''
 	def get(*args, **kwargs):
 		nonlocal my_class

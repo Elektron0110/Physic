@@ -168,7 +168,7 @@ class Импульс(Velocity):
             return self
 
 
-@once
+@singleton
 class Model:
     k, lang, g, ground, play, speed, ρ = 5, 'ru', Acceleration(
         [9.81, -90], Self), 0, False, 1, Density(1.204, Self)
