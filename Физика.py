@@ -16,18 +16,18 @@ class Base:
 
     def __add__(self, value):
         if isinstance(value, (int, float)):
-            return type(self)(self._value + value, self.Model)
+            return type(self)(self._value + value)
         if not isinstance(value, type(self)):
             return NotImplemented
-        return type(self)(self._value + value._value, self.Model)
+        return type(self)(self._value + value._value)
     __radd__ = __add__
 
     def __mul__(self, value):
         if isinstance(value, (int, float)):
-            return type(self)(self._value * value, self.Model)
+            return type(self)(self._value * value)
         if not isinstance(value, type(self)):
             return NotImplemented
-        return type(self)(self._value * value._value, self.Model)
+        return type(self)(self._value * value._value)
     __rmul__ = __mul__
 
     def __repr__(self) -> str:
@@ -36,7 +36,7 @@ class Base:
         return f'{round(self._value, self.Model.k)} {self.dimension[self.Model.lang]}'
 
     def copy(self):
-        return type(self)(self._value, self.Model)
+        return type(self)(self._value)
 
 
 class Energy(Base):
@@ -126,7 +126,7 @@ class Velocity:
 
     def copy(self):
         self._vector._ensure_polar()
-        return Velocity([self._vector.r, self._vector.θ], self.Model)
+        return Velocity([self._vector.r, self._vector.θ])
 
 
 class Acceleration(Velocity):
@@ -136,7 +136,7 @@ class Acceleration(Velocity):
         if isinstance(other, Time):
             c = self._vector
             c._ensure_polar()
-            return Velocity([c.r*other._value, c.θ], self.Model)
+            return Velocity([c.r*other._value, c.θ])
         elif isinstance(other, (int, float)):
             self._vector *= other
             return self
@@ -193,12 +193,12 @@ class Body:
 
     def __init__(self, model: Model = None, *args, **kwargs):
         self.Model = model if model is not None else Model()
-        self.m: Mass = Mass(kwargs.get('m', 1), model)
-        self.ρ: Density = Density(kwargs.get('ρ'), model)
-        self.V: Volume = Volume(kwargs.get('V'), model)
-        self.Vel: Velocity = Velocity(kwargs.get('Vel', [0, 0]), model)
-        self.temp: Temperature = Temperature(kwargs.get('temp', 20), model)
-        self.C: Specific_Heat = Specific_Heat(kwargs.get('C'), model)
+        self.m: Mass = Mass(kwargs.get('m', 1))
+        self.ρ: Density = Density(kwargs.get('ρ'))
+        self.V: Volume = Volume(kwargs.get('V'))
+        self.Vel: Velocity = Velocity(kwargs.get('Vel', [0, 0]))
+        self.temp: Temperature = Temperature(kwargs.get('temp', 20))
+        self.C: Specific_Heat = Specific_Heat(kwargs.get('C'))
         self.coordinates = Vector(kwargs.get('coordinates', (0, 0)))
         self.a: Acceleration = Acceleration(kwargs.get('a', [0, 0]))
         self.__name__ = type(self).__name__
@@ -223,7 +223,7 @@ class Body:
     def E_п(self) -> Energy:
         c = self.coordinates
         c._ensure_coord()
-        return Energy(self.Model.g._value * abs(c.y - self.Model.ground) * self.m._value, self.Model)
+        return Energy(self.Model.g._value * abs(c.y - self.Model.ground) * self.m._value)
 
     def __add__(self, _value):
         if isinstance(_value, Warmth):
@@ -231,7 +231,7 @@ class Body:
                 raise ValueError(
                     'Необходимы масса и теплоёмкость, чтобы добавить тепло')
             self.temp = self.temp + Temperature(
-                _value._value / (self.m._value * self.C._value), self.Model)
+                _value._value / (self.m._value * self.C._value))
         elif isinstance(_value, Mass):
             self.m = self.m + _value
         elif isinstance(_value, Force):
@@ -246,16 +246,16 @@ class Body:
         t = self.temp._value
         if self.Model.lang == 'en':
             t = (t - 32) / 1.8
-        return Energy(self.m._value * self.C._value * t, self.Model)
+        return Energy(self.m._value * self.C._value * t)
 
     def time(self, time=Time(1.0)):
-        value = time if isinstance(time, Time) else Time(value, self.Model)
+        value = time if isinstance(time, Time) else Time(value)
         self.Vel._vector._ensure_coord()
         self.coordinates._ensure_coord()
         self.coordinates.x = self.coordinates.x + \
             (self.Vel._vector.x*value)._value
         self.coordinates.y = self.coordinates.y + \
-            (self.Vel._vector.y*value)._value - (self.Model.g*value*value)/2
+            (self.Vel._vector.y*value)._value - ((self.a+self.Model.g)*value*value)/2
         self.Vel += self.Model.g*value
         if self.Model.play:
             sleep(time._value/self.Model.speed)
