@@ -154,6 +154,19 @@ class Force(Velocity):
             self._vector.r /= _value
             return self
 
+class Импульс(Velocity):
+    dimension = {'ru': 'Н', 'en': 'N'}
+
+    def __truediv__(self, _value):
+        if isinstance(_value, Mass):
+            self._vector._ensure_polar()
+            return Velocity([self._vector.r / _value._value, self._vector.θ])
+        elif isinstance(_value, (int, float)) or isinstance(_value, Vector) or issubclass(type(_value), Vector):
+            _value = Vector()._coerce(_value)
+            self._vector._ensure_polar()
+            self._vector.r /= _value
+            return self
+
 
 @once
 class Model:
@@ -189,7 +202,8 @@ class Body:
     C: Specific_Heat
     coordinates: Vector
     a: Acceleration
-    __el__ = ('m', 'ρ', 'V', 'temp', 'C', 'Vel', 'coordinates', 'a')
+    p: Импульс
+    __el__ = ('m', 'ρ', 'V', 'temp', 'C', 'Vel', 'coordinates', 'a', 'p')
 
     def __init__(self, model: Model = None, *args, **kwargs):
         self.Model = model if model is not None else Model()
@@ -201,6 +215,7 @@ class Body:
         self.C: Specific_Heat = Specific_Heat(kwargs.get('C'))
         self.coordinates = Vector(kwargs.get('coordinates', (0, 0)))
         self.a: Acceleration = Acceleration(kwargs.get('a', [0, 0]))
+        self.p: Импульс = Импульс(kwargs.get('p', [0, 0]))
         self.__name__ = type(self).__name__
 
     def move(self, to=None, around=None):
