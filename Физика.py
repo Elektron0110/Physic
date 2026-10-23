@@ -171,6 +171,8 @@ class Force(Velocity):
             self._vector.r /= _value
             return self
 
+    __rtruediv__ = __truediv__
+
 class Impulse(Velocity):
     dimension = {'ru': 'кг*м/с', 'en': 'kg*m/s'}
 
@@ -183,6 +185,8 @@ class Impulse(Velocity):
             self._vector._ensure_polar()
             self._vector.r /= _value
             return self
+
+    __rtruediv__ = __truediv__
 
 
 @singleton

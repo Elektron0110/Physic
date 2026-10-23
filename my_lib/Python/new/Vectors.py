@@ -142,6 +142,8 @@ class Vector:
         return Vector([self.r / other.r,
                   (self.θ - other.θ) % 360])
 
+    __rtruediv__ = __truediv__
+
 
 if __name__ == '__main__':
     v = Vector((2, 3))
