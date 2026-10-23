@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 class Base:
     _value: float
     dimension: dict
+    format = 'number'
 
     def __init__(self, value, model: 'Model' = None):
         self._value, self.Model = value, model if model is not None else Model()
@@ -37,6 +38,11 @@ class Base:
 
     def copy(self):
         return type(self)(self._value)
+
+    def __call__(self, value, model: 'Model' = None):
+        self._value, self.Model = value, model if model is not None else Model()
+        self.__name__ = type(self).__name__
+        return self
 
 
 class Energy(Base):
@@ -82,6 +88,7 @@ class Time(Base):
 
 class Velocity:
     dimension = {'ru': 'м/с', 'en': 'm/s'}
+    format = 'vector'
 
     def __init__(self, value=[0, 0], model: 'Model' = None):
         self.Model = model if model is not None else Model()
@@ -127,6 +134,12 @@ class Velocity:
     def copy(self):
         self._vector._ensure_polar()
         return Velocity([self._vector.r, self._vector.θ])
+    
+    def __call__(self, value=[0, 0], model: 'Model' = None):
+        self.Model = model if model is not None else Model()
+        self._vector = Vector(value)
+        self.__name__ = type(self).__name__
+        return self
 
 
 class Acceleration(Velocity):
@@ -282,8 +295,10 @@ class Body:
         return type(self)(**kw, model=self.Model)
 
 
-def inter(x, y, z, w, step=1, start=-10, stop=10, finish: int = None):
+def inter(x, y, z, w, step=1, start=-10, stop=10, finish: int = None, fix: int = None):
     '''x.w при x.y(z(n)) где start < n < stop, но x.w > finish'''
+    original = x.copy()
+
     ns = [stop]
     while start < stop:
         ns.insert(1, start)
@@ -291,8 +306,9 @@ def inter(x, y, z, w, step=1, start=-10, stop=10, finish: int = None):
     ns.sort()
     rs = []
 
+    if hasattr(getattr(original, y), 'format') and getattr(original, y).format == 'vector': ns = [[n, fix] for n in ns]
+
     for n in ns:
-        original = x.copy()
         getattr(original, y)(z(n))
         attrs = w.split('.')
         value = original
