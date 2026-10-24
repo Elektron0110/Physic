@@ -5,6 +5,7 @@ from my_lib.Python.new import *
 from my_lib.Python.new.Vectors import *
 import matplotlib.pyplot as plt
 
+Vect = Vector
 
 class Base:
     _value: float
@@ -88,7 +89,7 @@ class Vector(Base):
 
     def __init__(self, value=[0, 0], model: 'Model' = None):
         self.Model = model if model is not None else Model()
-        self._vector = Vector(value)
+        self._vector = Vect(value)
         self.__name__ = type(self).__name__
 
     @property
@@ -281,8 +282,8 @@ class Body:
         self.coordinates.x = self.coordinates.x + \
             (self.Vel._vector.x*value)._value
         self.coordinates.y = self.coordinates.y + \
-            (self.Vel._vector.y*value)._value - ((self.a.y+self.Model.g.y)*value*value)/2
-        self.Vel += (self.a+self.Model.g)*value
+            (self.Vel._vector.y*value)._value - ((self.a.y+self.Model.g.y+self.drag_acceleration())*value*value)/2
+        self.Vel += (self.a+self.Model.g+self.drag_acceleration())*value
         if self.Model.play:
             sleep(time._value/self.Model.speed)
 
@@ -291,6 +292,23 @@ class Body:
         for e in self.__el__:
             kw[e] = getattr(self, e)
         return type(self)(**kw, model=self.Model)
+
+    def drag_acceleration(self, C=0.47, S=None):
+        v = self.Vel._vector
+        v._ensure_coord()
+        speed = sqrt(v.x**2 + v.y**2)
+        if speed == 0:
+            return Acceleration([0, 0], self.Model)
+
+        # единичный вектор против скорости — аналог direction()
+        ux, uy = -v.x / speed, -v.y / speed
+
+        if S is None:
+            S = 3*self.m*self.ρ/4
+
+        F = 0.5 * C * self.Model.ρ._value * S * speed**2
+        a = F / self.m._value
+        return Acceleration([ux * a, uy * a], self.Model)
 
 
 def inter(x, y, z, w, step=1, start=-10, stop=10, finish: int = None, fix: int = None):
