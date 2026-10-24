@@ -110,22 +110,18 @@ class Velocity:
         return self._vector.r if self._vector.r else None
 
     def __add__(self, value):
-        if isinstance(value, Velocity):
-            self._vector += value._vector
-            return self
+        if isinstance(value, type(self)):
+            return type(self)(self._vector + value._vector)
         if isinstance(value, Vector):
-            self._vector += value
-            return self
+            return type(self)(self._vector + value)
         return NotImplemented
     __radd__ = __add__
 
     def __mul__(self, value):
         if isinstance(value, Velocity):
-            self._vector *= value._vector
-            return self
+            return Velocity(self._vector * value._vector)
         if isinstance(value, Vector):
-            self._vector *= value
-            return self
+            return Velocity(self._vector * value)
         if isinstance(value, Time):
             return float(self._vector * value._value)
         return NotImplemented
@@ -149,42 +145,39 @@ class Velocity:
 class Acceleration(Velocity):
     dimension = {'ru': 'м/с²', 'en': 'm/s²'}
 
-    def __mul__(self, other) -> Self:
+    def __mul__(self, other) -> 'Acceleration' | 'Velocity':
         if isinstance(other, Time):
             c = self._vector
             c._ensure_polar()
             return Velocity([c.r*other._value, c.θ])
         elif isinstance(other, (int, float)):
-            self._vector *= other
-            return self
+            return Acceleration(self._vector * other)
 
 class Force(Velocity):
     dimension = {'ru': 'Н', 'en': 'N'}
 
-    def __truediv__(self, _value):
+    def __truediv__(self, _value) -> 'Force' | 'Acceleration':
         if isinstance(_value, Mass):
             self._vector._ensure_polar()
             return Acceleration([self._vector.r / _value._value, self._vector.θ])
         elif isinstance(_value, (int, float)) or isinstance(_value, Vector) or issubclass(type(_value), Vector):
             _value = Vector()._coerce(_value)
             self._vector._ensure_polar()
-            self._vector.r /= _value
-            return self
+            return Force(self._vector.r / _value)
 
     __rtruediv__ = __truediv__
 
 class Impulse(Velocity):
     dimension = {'ru': 'кг*м/с', 'en': 'kg*m/s'}
 
-    def __truediv__(self, _value):
+    def __truediv__(self, _value) -> 'Velocity' | 'Impulse':
         if isinstance(_value, Mass):
             self._vector._ensure_polar()
             return Velocity([self._vector.r / _value._value, self._vector.θ])
         elif isinstance(_value, (int, float)) or isinstance(_value, Vector) or issubclass(type(_value), Vector):
             _value = Vector()._coerce(_value)
             self._vector._ensure_polar()
-            self._vector.r /= _value
-            return self
+            return Impulse(self._vector.r / _value)
 
     __rtruediv__ = __truediv__
 
@@ -261,20 +254,21 @@ class Body:
         c._ensure_coord()
         return Energy(self.Model.g._value * abs(c.y - self.Model.ground) * self.m._value)
 
-    def __add__(self, _value):
+    def __add__(self, _value) -> 'Body':
+        result = self
         if isinstance(_value, Warmth):
             if self.C._value is None or not self.m._value:
                 raise ValueError(
                     'Необходимы масса и теплоёмкость, чтобы добавить тепло')
-            self.temp = self.temp + Temperature(
+            result.temp = self.temp + Temperature(
                 _value._value / (self.m._value * self.C._value))
         elif isinstance(_value, Mass):
-            self.m = self.m + _value
+            result.m = self.m + _value
         elif isinstance(_value, Force):
-            self.a = self.a + (_value/self.m)
+            result.a = self.a + (_value/self.m)
         else:
             return NotImplemented
-        return self
+        return result
     __radd__ = __add__
 
     @property

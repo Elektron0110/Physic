@@ -88,7 +88,7 @@ class Vector:
     def __int__(self) -> int:
         return round(float(self))
 
-    def __mul__(self, other) -> Self:
+    def __mul__(self, other) -> 'Vector':
         other = self._coerce(other)
         if other is NotImplemented:
             return NotImplemented
@@ -99,7 +99,7 @@ class Vector:
 
     __rmul__ = __mul__
 
-    def __add__(self, other) -> Self:
+    def __add__(self, other) -> 'Vector':
         other = self._coerce(other)
         if other is NotImplemented:
             return NotImplemented
@@ -110,7 +110,7 @@ class Vector:
 
     __radd__ = __add__
 
-    def __pow__(self, n):
+    def __pow__(self, n) -> 'Vector':
         result = self
         if not isinstance(n, (int, float)):
             raise TypeError(f'Argument can not be {type(n).__name__} type')
@@ -133,7 +133,7 @@ class Vector:
             result = result * self
         return result
 
-    def __truediv__(self, other) -> Self:
+    def __truediv__(self, other) -> 'Vector':
         other = self._coerce(other)
         if other is NotImplemented:
             return NotImplemented
