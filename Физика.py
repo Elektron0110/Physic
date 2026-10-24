@@ -39,10 +39,7 @@ class Base:
     def copy(self):
         return type(self)(self._value)
 
-    def __call__(self, value, model: 'Model' = None):
-        self._value, self.Model = value, model if model is not None else Model()
-        self.__name__ = type(self).__name__
-        return self
+    __call__ = __init__
 
 
 class Energy(Base):
@@ -86,8 +83,7 @@ class Time(Base):
     dimension = {'ru': 'с', 'en': 's'}
 
 
-class Velocity:
-    dimension = {'ru': 'м/с', 'en': 'm/s'}
+class Vector(Base): 
     format = 'vector'
 
     def __init__(self, value=[0, 0], model: 'Model' = None):
@@ -117,7 +113,18 @@ class Velocity:
         return NotImplemented
     __radd__ = __add__
 
-    def __mul__(self, value):
+    def __repr__(self) -> str:
+        self._vector._ensure_polar()
+        return f'{round(self._value, self.Model.k) if self._value else self._value} {self.dimension[self.Model.lang]}'
+
+    def copy(self):
+        self._vector._ensure_polar()
+        return type(self)([self._vector.r, self._vector.θ])
+
+class Velocity(Vector):
+    dimension = {'ru': 'м/с', 'en': 'm/s'}
+
+    def __mul__(self, value) -> 'Velocity' | float:
         if isinstance(value, Velocity):
             return Velocity(self._vector * value._vector)
         if isinstance(value, Vector):
@@ -125,24 +132,11 @@ class Velocity:
         if isinstance(value, Time):
             return float(self._vector * value._value)
         return NotImplemented
+    
     __rmul__ = __mul__
 
-    def __repr__(self) -> str:
-        self._vector._ensure_polar()
-        return f'{round(self._value, self.Model.k) if self._value else self._value} {self.dimension[self.Model.lang]}'
 
-    def copy(self):
-        self._vector._ensure_polar()
-        return Velocity([self._vector.r, self._vector.θ])
-    
-    def __call__(self, value=[0, 0], model: 'Model' = None):
-        self.Model = model if model is not None else Model()
-        self._vector = Vector(value)
-        self.__name__ = type(self).__name__
-        return self
-
-
-class Acceleration(Velocity):
+class Acceleration(Vector):
     dimension = {'ru': 'м/с²', 'en': 'm/s²'}
 
     def __mul__(self, other) -> 'Acceleration' | 'Velocity':
@@ -152,8 +146,10 @@ class Acceleration(Velocity):
             return Velocity([c.r*other._value, c.θ])
         elif isinstance(other, (int, float)):
             return Acceleration(self._vector * other)
+    
+    __rmul__ = __mul__
 
-class Force(Velocity):
+class Force(Vector):
     dimension = {'ru': 'Н', 'en': 'N'}
 
     def __truediv__(self, _value) -> 'Force' | 'Acceleration':
@@ -167,7 +163,7 @@ class Force(Velocity):
 
     __rtruediv__ = __truediv__
 
-class Impulse(Velocity):
+class Impulse(Vector):
     dimension = {'ru': 'кг*м/с', 'en': 'kg*m/s'}
 
     def __truediv__(self, _value) -> 'Velocity' | 'Impulse':
