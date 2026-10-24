@@ -19,18 +19,26 @@ class Base:
     def __add__(self, value):
         if isinstance(value, (int, float)):
             return type(self)(self._value + value)
-        if not isinstance(value, type(self)):
-            return NotImplemented
-        return type(self)(self._value + value._value)
+        if isinstance(value, type(self)):
+            return type(self)(self._value + value._value)
+        return NotImplemented
     __radd__ = __add__
 
     def __mul__(self, value):
         if isinstance(value, (int, float)):
             return type(self)(self._value * value)
-        if not isinstance(value, type(self)):
-            return NotImplemented
-        return type(self)(self._value * value._value)
+        if isinstance(value, type(self)):
+            return type(self)(self._value * value._value)
+        return NotImplemented
     __rmul__ = __mul__
+
+    def __truediv__(self, value):
+        if isinstance(value, (int, float)):
+            return type(self)(self._value / value)
+        if isinstance(value, type(self)):
+            return type(self)(self._value / value._value)
+        return NotImplemented
+    __truediv__ = __truediv__
 
     def __repr__(self) -> str:
         if self._value is None:
@@ -67,9 +75,29 @@ class Temperature(Base):
 class Mass(Base):
     dimension = {'ru': 'кг', 'en': 'kg'}
 
+    def __mul__(self, value):
+        if isinstance(value, (int, float)):
+            return Mass(self._value * value)
+        if isinstance(value, Density):
+            return Volume(self._value * value._value)
+        if isinstance(value, Mass):
+            return Mass(self._value * value._value)
+        return NotImplemented
+    __rmul__ = __mul__
+
 
 class Volume(Base):
     dimension = {'ru': 'м³', 'en': 'm³'}
+
+    def __truediv__(self, value):
+        if isinstance(value, (int, float)):
+            return Volume(self._value / value)
+        if isinstance(value, Density):
+            return Mass(self._value / value._value)
+        if isinstance(value, Mass):
+            return Density(self._value / value._value)
+        return NotImplemented
+    __rtruediv__ = __truediv__
 
 
 class Density(Base):
@@ -85,6 +113,8 @@ class Time(Base):
 
 
 class Vector(Base): 
+    _vector: Vect
+    dimension = {'ru': 'Векторная величина', 'en': 'Vector quantity'}
     format = 'vector'
 
     def __init__(self, value=[0, 0], model: 'Model' = None):
@@ -109,7 +139,9 @@ class Vector(Base):
     def __add__(self, value):
         if isinstance(value, type(self)):
             return type(self)(self._vector + value._vector)
-        if isinstance(value, Vector):
+        if isinstance(value, tuple):
+            value = Vect._coerce(tuple)
+        if isinstance(value, Vect):
             return type(self)(self._vector + value)
         return NotImplemented
     __radd__ = __add__
@@ -125,10 +157,10 @@ class Vector(Base):
 class Velocity(Vector):
     dimension = {'ru': 'м/с', 'en': 'm/s'}
 
-    def __mul__(self, value) -> 'Velocity' | float:
+    def __mul__(self, value) -> Type['Velocity'] | float:
         if isinstance(value, Velocity):
             return Velocity(self._vector * value._vector)
-        if isinstance(value, Vector):
+        if isinstance(value, Vect):
             return Velocity(self._vector * value)
         if isinstance(value, Time):
             return float(self._vector * value._value)
@@ -140,7 +172,7 @@ class Velocity(Vector):
 class Acceleration(Vector):
     dimension = {'ru': 'м/с²', 'en': 'm/s²'}
 
-    def __mul__(self, other) -> 'Acceleration' | 'Velocity':
+    def __mul__(self, other) -> Type['Acceleration'] | Type['Velocity']:
         if isinstance(other, Time):
             c = self._vector
             c._ensure_polar()
@@ -153,12 +185,12 @@ class Acceleration(Vector):
 class Force(Vector):
     dimension = {'ru': 'Н', 'en': 'N'}
 
-    def __truediv__(self, _value) -> 'Force' | 'Acceleration':
+    def __truediv__(self, _value) -> Type['Force'] | Type['Acceleration']:
         if isinstance(_value, Mass):
             self._vector._ensure_polar()
             return Acceleration([self._vector.r / _value._value, self._vector.θ])
-        elif isinstance(_value, (int, float)) or isinstance(_value, Vector) or issubclass(type(_value), Vector):
-            _value = Vector()._coerce(_value)
+        elif isinstance(_value, (int, float)) or isinstance(_value, Vect) or issubclass(type(_value), Vect):
+            _value = Vect()._coerce(_value)
             self._vector._ensure_polar()
             return Force(self._vector.r / _value)
 
@@ -167,12 +199,12 @@ class Force(Vector):
 class Impulse(Vector):
     dimension = {'ru': 'кг*м/с', 'en': 'kg*m/s'}
 
-    def __truediv__(self, _value) -> 'Velocity' | 'Impulse':
+    def __truediv__(self, _value) -> Type['Velocity'] | Type['Impulse']:
         if isinstance(_value, Mass):
             self._vector._ensure_polar()
             return Velocity([self._vector.r / _value._value, self._vector.θ])
-        elif isinstance(_value, (int, float)) or isinstance(_value, Vector) or issubclass(type(_value), Vector):
-            _value = Vector()._coerce(_value)
+        elif isinstance(_value, (int, float)) or isinstance(_value, Vect) or issubclass(type(_value), Vect):
+            _value = Vect()._coerce(_value)
             self._vector._ensure_polar()
             return Impulse(self._vector.r / _value)
 
@@ -224,15 +256,15 @@ class Body:
         self.Vel: Velocity = Velocity(kwargs.get('Vel', [0, 0]))
         self.temp: Temperature = Temperature(kwargs.get('temp', 20))
         self.C: Specific_Heat = Specific_Heat(kwargs.get('C'))
-        self.coordinates = Vector(kwargs.get('coordinates', (0, 0)))
+        self.coordinates = Vect(kwargs.get('coordinates', (0, 0)))
         self.a: Acceleration = Acceleration(kwargs.get('a', [0, 0]))
         self.p: Impulse = Impulse(kwargs.get('p', [0, 0]))
         self.__name__ = type(self).__name__
 
     def move(self, to=None, around=None):
         if isinstance(to, tuple):
-            self.coordinates = Vector(to)
-        if isinstance(around, (tuple, Vector)):
+            self.coordinates = Vect(to)
+        if isinstance(around, (tuple, Vect)):
             self.coordinates += around
         return
 
@@ -277,13 +309,15 @@ class Body:
 
     def time(self, time=Time(1.0)):
         value = time if isinstance(time, Time) else Time(time)
+        drag = self.drag_acceleration()._vector
         self.Vel._vector._ensure_coord()
         self.coordinates._ensure_coord()
+        drag._ensure_coord()
         self.coordinates.x = self.coordinates.x + \
-            (self.Vel._vector.x*value)._value
+            (self.Vel._vector.x*value)._value + ((self.a.x+self.Model.g.x+drag.x)*value*value)/2
         self.coordinates.y = self.coordinates.y + \
-            (self.Vel._vector.y*value)._value - ((self.a.y+self.Model.g.y+self.drag_acceleration())*value*value)/2
-        self.Vel += (self.a+self.Model.g+self.drag_acceleration())*value
+            (self.Vel._vector.y*value)._value + ((self.a.y+self.Model.g.y+drag.y)*value*value)/2
+        self.Vel += (self.a+self.Model.g+drag)*value
         if self.Model.play:
             sleep(time._value/self.Model.speed)
 
