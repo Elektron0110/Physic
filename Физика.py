@@ -40,6 +40,13 @@ class Base:
         return NotImplemented
     __truediv__ = __truediv__
 
+    def __pow__(self, n):
+        result = self
+        if not isinstance(n, (int, float)):
+            raise TypeError(f'Argument can not be {type(n).__name__} type')
+        result._value ** n 
+        return result
+
     def __repr__(self) -> str:
         if self._value is None:
             return f'None {self.dimension[self.Model.lang]}'
@@ -48,8 +55,14 @@ class Base:
     def copy(self):
         return type(self)(self._value)
 
+    def __round__(self, k: int | float = None):
+        k = k if k else self.Model.k
+        return round(self._value, k)
+
     __call__ = __init__
 
+
+class Lenght(Base): dimension = {'ru': 'м', 'en': 'm'}
 
 class Energy(Base):
     dimension = {'ru': 'Дж', 'en': 'J'}
@@ -68,9 +81,6 @@ class Temperature(Base):
             value = (value - 32) / 1.8
         return value + 273.15
 
-    def __repr__(self) -> str:
-        return f'{round(self._value, self.Model.k)} {self.dimension[self.Model.lang]}'
-
 
 class Mass(Base):
     dimension = {'ru': 'кг', 'en': 'kg'}
@@ -78,13 +88,24 @@ class Mass(Base):
     def __mul__(self, value):
         if isinstance(value, (int, float)):
             return Mass(self._value * value)
-        if isinstance(value, Density):
-            return Volume(self._value * value._value)
         if isinstance(value, Mass):
             return Mass(self._value * value._value)
+        if isinstance(value, Acceleration):
+            return Force(self._value * value._value)
         return NotImplemented
     __rmul__ = __mul__
 
+    def __truediv__(self, value):
+        if isinstance(value, Density):
+            return Volume(self._value / value._value)
+        if isinstance(value, Volume):
+            return Density(self._value / value._value)
+        if isinstance(value, (int, float)):
+            return Mass(self._value / value)
+        if isinstance(value, Mass):
+            return Mass(self._value / value._value)
+        return NotImplemented
+    __rtruediv__ = __truediv__
 
 class Volume(Base):
     dimension = {'ru': 'м³', 'en': 'm³'}
@@ -98,6 +119,14 @@ class Volume(Base):
             return Density(self._value / value._value)
         return NotImplemented
     __rtruediv__ = __truediv__
+
+    def __pow__(self, n):
+        result = self
+        if not isinstance(n, (int, float)):
+            raise TypeError(f'Argument can not be {type(n).__name__} type')
+        result._value ** n
+        if n == 1/3: return Lenght(result._value)
+        return result
 
 
 class Density(Base):
@@ -154,6 +183,29 @@ class Vector(Base):
         self._vector._ensure_polar()
         return type(self)([self._vector.r, self._vector.θ])
 
+    def __pow__(self, n):
+        result = self
+        if not isinstance(n, (int, float)):
+            raise TypeError(f'Argument can not be {type(n).__name__} type')
+        if isinstance(n, float):
+            z = int(n)
+            a = n-z
+            b = a*10-a
+            c = round(9/b) # 1/c = a
+            d = round(z*c+1) # d/c = n
+            result = result ** d
+            result._ensure_polar()
+            result.θ /= c
+            result.r **=a
+            return result
+        if n < 0:
+            for _ in range(abs(n-1)):
+                result = result * self
+            return 1/result
+        for _ in range(n-1):
+            result = result * self
+        return result
+
 class Velocity(Vector):
     dimension = {'ru': 'м/с', 'en': 'm/s'}
 
@@ -177,6 +229,12 @@ class Acceleration(Vector):
             c = self._vector
             c._ensure_polar()
             return Velocity([c.r*other._value, c.θ])
+        if isinstance(other, (Acceleration, Vect)):
+            c = self._vector
+            other = other._vector
+            c._ensure_polar()
+            other._ensure_polar()
+            return Acceleration([c.r*other.r, c.θ+other.θ])
         elif isinstance(other, (int, float)):
             return Acceleration(self._vector * other)
     
@@ -213,6 +271,7 @@ class Impulse(Vector):
 
 @singleton
 class Model:
+    π = 3.1415926535897
     k, lang, g, ground, play, speed, ρ = 5, 'ru', Acceleration(
         [9.81, -90], Self), 0, False, 1, Density(1.204, Self)
     a = ('k', 'lang', 'g', 'ground', 'play', 'speed', 'ρ')
@@ -243,7 +302,7 @@ class Body:
     Vel: Velocity
     temp: Temperature
     C: Specific_Heat
-    coordinates: Vector
+    coordinates: Vect
     a: Acceleration
     p: Impulse
     __el__ = ('m', 'ρ', 'V', 'temp', 'C', 'Vel', 'coordinates', 'a', 'p')
@@ -325,24 +384,27 @@ class Body:
         kw = {}
         for e in self.__el__:
             kw[e] = getattr(self, e)
-        return type(self)(**kw, model=self.Model)
+        return type(self)(**kw)
 
     def drag_acceleration(self, C=0.47, S=None):
         v = self.Vel._vector
         v._ensure_coord()
         speed = sqrt(v.x**2 + v.y**2)
         if speed == 0:
-            return Acceleration([0, 0], self.Model)
+            return Acceleration([0, 0])
 
         # единичный вектор против скорости — аналог direction()
         ux, uy = -v.x / speed, -v.y / speed
+        a_0 = Acceleration([ux, uy])
 
         if S is None:
-            S = 3*self.m*self.ρ/4
+            r = (3*self.m/(4*self.Model.π*self.ρ)) ** (1/3)
+            S = self.Model.π * r**2
 
-        F = 0.5 * C * self.Model.ρ._value * S * speed**2
-        a = F / self.m._value
-        return Acceleration([ux * a, uy * a], self.Model)
+        v._ensure_polar()
+        F = Force([0.5 * C * self.Model.ρ._value * S._value * speed**2, -v.θ])
+        a: Acceleration = F / self.m
+        return a_0*a
 
 
 def inter(x, y, z, w, step=1, start=-10, stop=10, finish: int = None, fix: int = None):
@@ -381,7 +443,6 @@ def saw(x, y: str, z, w: str | tuple[str], step=1, start=-10, stop=10):
     for kw in w:
         data = inter(x, y, z, kw, step, start, stop)
         plt.plot(*data)
-        # print(data[0])
 
 
 m = Model(lang='ru')
