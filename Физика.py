@@ -402,7 +402,7 @@ class Body:
             S = self.Model.π * r**2
 
         v._ensure_polar()
-        F = Force([0.5 * C * self.Model.ρ._value * S._value * speed**2, -v.θ])
+        F = Force([0.5 * C * self.Model.ρ._value * S._value * speed**2, 360-v.θ])
         a: Acceleration = F / self.m
         return a_0*a
 
