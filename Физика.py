@@ -57,7 +57,7 @@ class Base:
 
     def __round__(self, k: int | float = None):
         k = k if k else self.Model.k
-        return round(self._value, k)
+        return round(self._value, k) if self._value else 'None'
 
     __call__ = __init__
 
@@ -366,6 +366,7 @@ class Body:
         return Energy(self.m._value * self.C._value * t)
 
     def time(self, time=Time(1.0)):
+        if isinstance(self.m._value, Mass): self.m = Mass(self.m._value._value)
         value = time if isinstance(time, Time) else Time(time)
         drag = self.drag_acceleration()._vector
         self.Vel._vector._ensure_coord()
