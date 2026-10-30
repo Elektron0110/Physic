@@ -59,8 +59,6 @@ class Base:
         k = k if k else self.Model.k
         return round(self._value, k) if self._value else 'None'
 
-    __call__ = __init__
-
 
 class Lenght(Base): dimension = {'ru': 'м', 'en': 'm'}
 
@@ -327,6 +325,8 @@ class Body:
         return
 
     def __repr__(self) -> str:
+        self.repair()
+
         parts = []
         for a in self.__el__:
             value = getattr(self, a)
@@ -342,6 +342,8 @@ class Body:
         return Energy(self.Model.g._value * abs(c.y - self.Model.ground) * self.m._value)
 
     def __add__(self, _value) -> 'Body':
+        self.repair()
+
         result = self
         if isinstance(_value, Warmth):
             if self.C._value is None or not self.m._value:
@@ -366,7 +368,8 @@ class Body:
         return Energy(self.m._value * self.C._value * t)
 
     def time(self, time=Time(1.0)):
-        if isinstance(self.m._value, Mass): self.m = Mass(self.m._value._value)
+        self.repair()
+
         value = time if isinstance(time, Time) else Time(time)
         drag = self.drag_acceleration()._vector
         self.Vel._vector._ensure_coord()
@@ -381,12 +384,16 @@ class Body:
             sleep(time._value/self.Model.speed)
 
     def copy(self):
+        self.repair()
+
         kw = {}
         for e in self.__el__:
             kw[e] = getattr(self, e)
         return type(self)(**kw)
 
     def drag_acceleration(self, C=0.47, S=None):
+        self.repair()
+
         v = self.Vel._vector
         v._ensure_coord()
         speed = self.Vel._value
@@ -399,6 +406,12 @@ class Body:
         F = Force([0.5 * C * self.Model.ρ._value * S._value * speed**2, 360-v.θ])
         a: Acceleration = F / self.m
         return a
+    
+    def repair(self):
+        for el in self.__el__:
+            if hasattr(getattr(self, el), '_vect') or isinstance(getattr(self, el), Vect): continue
+            while isinstance(getattr(self, el)._value, Base):
+                setattr(self, el, getattr(self, el)._value)
 
 
 def inter(x, y, z, w, step=1, start=-10, stop=10, finish: int = None, fix: int = None):
