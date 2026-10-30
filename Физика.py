@@ -38,13 +38,12 @@ class Base:
         if isinstance(value, type(self)):
             return type(self)(self._value / value._value)
         return NotImplemented
-    __truediv__ = __truediv__
 
     def __pow__(self, n):
-        result = self
+        result = self.copy()
         if not isinstance(n, (int, float)):
             raise TypeError(f'Argument can not be {type(n).__name__} type')
-        result._value ** n 
+        result._value **= n 
         return result
 
     def __repr__(self) -> str:
@@ -103,7 +102,6 @@ class Mass(Base):
         if isinstance(value, Mass):
             return Mass(self._value / value._value)
         return NotImplemented
-    __rtruediv__ = __truediv__
 
 class Volume(Base):
     dimension = {'ru': 'м³', 'en': 'm³'}
@@ -116,13 +114,12 @@ class Volume(Base):
         if isinstance(value, Mass):
             return Density(self._value / value._value)
         return NotImplemented
-    __rtruediv__ = __truediv__
 
     def __pow__(self, n):
         if not isinstance(n, (int, float)):
             raise TypeError(f'Argument can not be {type(n).__name__} type')
         result = Volume(self._value ** n)
-        if n == 1/3: return Lenght(result._value)
+        if abs(n - 1/3) < 1e-9: return Lenght(result._value)
         return result
 
 
@@ -166,7 +163,7 @@ class Vector(Base):
         if isinstance(value, type(self)):
             return type(self)(self._vector + value._vector)
         if isinstance(value, tuple):
-            value = Vect._coerce(tuple)
+            value = Vect._coerce(value)
         if isinstance(value, Vect):
             return type(self)(self._vector + value)
         return NotImplemented
@@ -249,8 +246,6 @@ class Force(Vector):
             self._vector._ensure_polar()
             return Force(self._vector.r / _value)
 
-    __rtruediv__ = __truediv__
-
 class Impulse(Vector):
     dimension = {'ru': 'кг*м/с', 'en': 'kg*m/s'}
 
@@ -262,8 +257,6 @@ class Impulse(Vector):
             _value = Vect()._coerce(_value)
             self._vector._ensure_polar()
             return Impulse(self._vector.r / _value)
-
-    __rtruediv__ = __truediv__
 
 
 @singleton
@@ -378,6 +371,7 @@ class Body:
         self.coordinates.x += ((self.Vel._vector.x*value)._value + ((self.a.x+self.Model.g.x+drag.x)*value**2)/2)._value
         self.coordinates.y += ((self.Vel._vector.y*value)._value + ((self.a.y+self.Model.g.y+drag.y)*value*value)/2)._value
         self.Vel += (self.a+self.Model.g+drag)*value
+        self.p = Impulse([self.m._value * self.Vel._value, self.Vel._vector.θ])
         if self.Model.play:
             sleep(time._value/self.Model.speed)
 
@@ -396,18 +390,21 @@ class Body:
         v._ensure_coord()
         speed = self.Vel._value
 
+        if not speed:
+            return Acceleration([0, 0])
+
         if S is None:
             r = (3*self.m/(4*self.Model.π*self.ρ)) ** (1/3)
-            S = self.Model.π * r**2
+            S = self.Model.π * r._value**2
 
         v._ensure_polar()
-        F = Force([0.5 * C * self.Model.ρ._value * S._value * speed**2, 360-v.θ])
+        F = Force([0.5 * C * self.Model.ρ._value * S * speed**2, (v.θ + 180) % 360])
         a: Acceleration = F / self.m
         return a
     
     def repair(self):
         for el in self.__el__:
-            if hasattr(getattr(self, el), '_vect') or isinstance(getattr(self, el), Vect): continue
+            if hasattr(getattr(self, el), '_vector') or isinstance(getattr(self, el), Vect): continue
             while isinstance(getattr(self, el)._value, Base):
                 setattr(self, el, getattr(self, el)._value)
 

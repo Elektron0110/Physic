@@ -111,27 +111,13 @@ class Vector:
 
     __radd__ = __add__
 
-    def __pow__(self, n) -> 'Vector':
-        result = self
+    def __pow__(self, n):
         if not isinstance(n, (int, float)):
             raise TypeError(f'Argument can not be {type(n).__name__} type')
-        if isinstance(n, float):
-            z = int(n)
-            a = n-z
-            b = a*10-a
-            c = round(9/b) # 1/c = a
-            d = round(z*c+1) # d/c = n
-            result = result ** d
-            result._ensure_polar()
-            result.θ /= c
-            result.r **=a
-            return result
-        if n < 0:
-            for _ in range(abs(n-1)):
-                result = result * self
-            return 1/result
-        for _ in range(n-1):
-            result = result * self
+        self._ensure_polar()
+        result = Vector([1, 0], k=self.k)
+        result.r = self.r ** n
+        result.θ = (self.θ * n) % 360
         return result
 
     def __truediv__(self, other) -> 'Vector':
