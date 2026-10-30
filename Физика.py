@@ -375,10 +375,8 @@ class Body:
         self.Vel._vector._ensure_coord()
         self.coordinates._ensure_coord()
         drag._ensure_coord()
-        self.coordinates.x = self.coordinates.x + \
-            (self.Vel._vector.x*value)._value + ((self.a.x+self.Model.g.x+drag.x)*value*value)/2
-        self.coordinates.y = self.coordinates.y + \
-            (self.Vel._vector.y*value)._value + ((self.a.y+self.Model.g.y+drag.y)*value*value)/2
+        self.coordinates.x += ((self.Vel._vector.x*value)._value + ((self.a.x+self.Model.g.x+drag.x)*value**2)/2)._value
+        self.coordinates.y += ((self.Vel._vector.y*value)._value + ((self.a.y+self.Model.g.y+drag.y)*value*value)/2)._value
         self.Vel += (self.a+self.Model.g+drag)*value
         if self.Model.play:
             sleep(time._value/self.Model.speed)
@@ -435,8 +433,7 @@ def inter(x, y, z, w, step=1, start=-10, stop=10, finish: int = None, fix: int =
             value = getattr(value, attr)
 
         rs.append(value)
-
-        if finish is not None and value <= finish:
+        if finish is not None and value < finish:
             ns = ns[:len(rs)]
             break
     if finish is not None:
