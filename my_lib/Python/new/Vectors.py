@@ -6,7 +6,8 @@ from math import sqrt, sin, cos, tan, asin, acos, atan2, radians, degrees
 repeats = 1
 def print(*a, **k):
     global repeats
-    builtins.print(f'{repeats}.', *a, **k)
+    k['sep'] = k['sep'] if 'sep' in k else ' | '
+    builtins.print(f'{repeats}.\t{a[0]}', *(a[1:]), **k)
     repeats += 1
 
 
