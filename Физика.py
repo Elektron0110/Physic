@@ -121,10 +121,9 @@ class Volume(Base):
     __rtruediv__ = __truediv__
 
     def __pow__(self, n):
-        result = self
         if not isinstance(n, (int, float)):
             raise TypeError(f'Argument can not be {type(n).__name__} type')
-        result._value ** n
+        result = Volume(self._value ** n)
         if n == 1/3: return Lenght(result._value)
         return result
 
@@ -389,13 +388,7 @@ class Body:
     def drag_acceleration(self, C=0.47, S=None):
         v = self.Vel._vector
         v._ensure_coord()
-        speed = sqrt(v.x**2 + v.y**2)
-        if speed == 0:
-            return Acceleration([0, 0])
-
-        # единичный вектор против скорости — аналог direction()
-        ux, uy = -v.x / speed, -v.y / speed
-        a_0 = Acceleration([ux, uy])
+        speed = self.Vel._value
 
         if S is None:
             r = (3*self.m/(4*self.Model.π*self.ρ)) ** (1/3)
@@ -404,7 +397,7 @@ class Body:
         v._ensure_polar()
         F = Force([0.5 * C * self.Model.ρ._value * S._value * speed**2, 360-v.θ])
         a: Acceleration = F / self.m
-        return a_0*a
+        return a
 
 
 def inter(x, y, z, w, step=1, start=-10, stop=10, finish: int = None, fix: int = None):
