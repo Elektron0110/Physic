@@ -1,11 +1,3 @@
-"""Физика: физические величины с размерностями, векторы и моделирование движения тела
-с учётом сопротивления воздуха.
-
-Интеграторы:
-    time()    — полунеявный Эйлер (симплектический): сначала скорость, потом координаты;
-    time_rk2()— метод средней точки: ускорение пересчитывается по скорости в середине шага.
-Оба дают на порядок меньшую ошибку, чем явный Эйлер, при том же шаге.
-"""
 import math
 from math import sqrt, sin, cos, atan2, radians, degrees, pi
 from time import sleep
@@ -14,11 +6,8 @@ from my_lib.Python.new import *
 from my_lib.Python.new.Vectors import *
 import matplotlib.pyplot as plt
 
-Vect = Vector
-
 
 def _copy_vector(v: Vector) -> Vector:
-    """Копия вектора БЕЗ перевода исходника в другую систему координат."""
     if v.x is not None:
         return Vector((v.x, v.y))
     if v.r is not None:
@@ -91,12 +80,6 @@ class Base:
         k = k if k else self.Model.k
         return round(self._value, k) if self._value is not None else 'None'
 
-    def __call__(self, value, model: 'Model' = None):
-        self._value = value
-        if model is not None:
-            self.Model = model
-        return self
-
 
 class Lenght(Base):
     dimension = {'ru': 'м', 'en': 'm'}
@@ -148,8 +131,7 @@ class Volume(Base):
         return super().__truediv__(value)
 
     def __pow__(self, n):
-        # сравнение с допуском: 2/6, 0.333333 и 1/3 — это один и тот же кубический корень
-        if abs(n - 1 / 3) < 1e-4:   # ловит и 0.333333, и 2/6
+        if abs(n - 1 / 3) < 1e-4:
             return Lenght(self._value ** (1 / 3))
         return super().__pow__(n)
 
@@ -168,19 +150,20 @@ class Time(Base):
 
 # ─────────────────────────────── векторные величины ───────────────────────────────
 
-class VectPhysical:
+class VectPhysical(Base):
     """Обёртка над Vector: сложение/вычитание через компоненты, без мутации операндов."""
     format = 'vector'
 
     def __init__(self, value=(0, 0), model: 'Model' = None):
         self.Model = model if model is not None else Model()
+
         self.__name__ = type(self).__name__
         if isinstance(value, type(self)):
             self._vector = _copy_vector(value._vector)
         elif isinstance(value, Vector):
             self._vector = _copy_vector(value)
         elif isinstance(value, (tuple, list)) and len(value) == 2:
-            self._vector = Vector(value)      # tuple — декартовы, list — полярные [r, θ°]
+            self._vector = Vector(value)
         else:
             raise TypeError(f'Value must be tuple, list, Vector or {type(self).__name__}, '
                             f'not {type(value).__name__}.')
@@ -202,7 +185,6 @@ class VectPhysical:
 
     @property
     def _value(self):
-        """Модуль вектора (или None для нулевого)."""
         self._vector._ensure_polar()
         return self._vector.r if self._vector.r else None
 
@@ -237,6 +219,8 @@ class VectPhysical:
             k = value
         elif isinstance(value, Base) and isinstance(value._value, (int, float)):
             k = value._value
+        elif isinstance(value, (type(self), VectPhysical)):
+            return type(self)([self.r*value.r, self.θ+value.θ])
         else:
             return NotImplemented
         return type(self)((self.x * k, self.y * k))
@@ -247,6 +231,8 @@ class VectPhysical:
             k = value
         elif isinstance(value, Base) and isinstance(value._value, (int, float)):
             k = value._value
+        elif isinstance(value, (type(self), VectPhysical)):
+            return type(self)([self.r*value.r, self.θ+value.θ])
         else:
             return NotImplemented
         return type(self)((self.x / k, self.y / k))
@@ -264,22 +250,37 @@ class VectPhysical:
 class Velocity(VectPhysical):
     dimension = {'ru': 'м/с', 'en': 'm/s'}
 
-
-class Acceleration(VectPhysical):
-    dimension = {'ru': 'м/с²', 'en': 'm/s²'}
-
     def __mul__(self, value):
         if isinstance(value, Time):
             return Velocity((self.x * value._value, self.y * value._value))
         return super().__mul__(value)
 
 
+class Acceleration(VectPhysical):
+    dimension = {'ru': 'м/с²', 'en': 'm/s²'}
+
+    def __mul__(self, value) -> Type['Acceleration'] | Type['Position']:
+        if isinstance(value, Time):
+            return Position((self.x * value._value, self.y * value._value))
+        return super().__mul__(value)
+
+
 class Force(VectPhysical):
     dimension = {'ru': 'Н', 'en': 'N'}
 
+    def __truediv__(self, value) -> Type['Force'] | Type['Acceleration']:
+        if isinstance(value, Mass):
+            return Acceleration([self._vector.r / value._value, self.θ])
+        return super().__truediv__(value)
+
 
 class Impulse(VectPhysical):
-    dimension = {'ru': 'кг·м/с', 'en': 'kg·m/s'}   # импульс, а не ньютон
+    dimension = {'ru': 'кг·м/с', 'en': 'kg·m/s'}
+
+    def __truediv__(self, value) -> Type['Impulse'] | Type['Velocity']:
+        if isinstance(value, Mass):
+            return Velocity([self._vector.r / value._value, self.θ])
+        return super().__truediv__(value)
 
 
 class Position(VectPhysical):
@@ -289,8 +290,6 @@ class Position(VectPhysical):
 # ─────────────────────────────────── модель мира ──────────────────────────────────
 
 def singleton(cls):
-    """Честный синглтон: повторный вызов возвращает тот же экземпляр, а не пытается
-    вызвать объект как класс; повторные kwargs обновляют атрибуты."""
     instance = None
 
     def get(*args, **kwargs):
@@ -311,14 +310,14 @@ def singleton(cls):
 
 @singleton
 class Model:
-    def __init__(self, k=5, lang='ru', g=(0, -9.81), ρ=1.204, play=False, speed=1.0):
-        self.k = k              # знаков после запятой при выводе
-        self.lang = lang        # 'ru' | 'en'
-        self.play = play        # анимировать шаги?
-        self.speed = speed      # множитель скорости анимации
+    def __init__(self, k=5, lang: Literal['ru', 'en' ] = 'ru', g=[9.81, 270], ρ=1.204, play=False, speed=1.0):
+        self.k = k
+        self.lang = lang
+        self.play = play        
+        self.speed = speed
         self.π = math.pi
-        self.g = Acceleration(tuple(g), self)   # ускорение свободного падения
-        self.ρ = Density(ρ, self)               # плотность среды (воздух при 20 °C)
+        self.g = Acceleration(tuple(g), self)
+        self.ρ = Density(ρ, self)
 
 
 # ───────────────────────────────────── тело ───────────────────────────────────────
@@ -341,7 +340,6 @@ class Body:
         self.p = p if isinstance(p, Impulse) else Impulse((0, 0))
 
     def repair(self):
-        """Распаковывает вложенные обёртки значений (наследие старого copy)."""
         for el in self.__el__:
             attr = getattr(self, el, None)
             if attr is None or getattr(attr, 'format', '') == 'vector':
@@ -352,44 +350,31 @@ class Body:
                     value = value._value
                 setattr(self, el, type(attr)(value))
 
-    def drag_acceleration(self, C=0.47, S=None, vel=None):
-        """Ускорение сопротивления воздуха: F = ½·C·ρ·S·v², направлено ПРОТИВ скорости."""
-        if vel is None:
-            self.Vel._vector._ensure_polar()
-            speed, θ = self.Vel._vector.r, self.Vel._vector.θ
-        else:
-            vx, vy = vel
-            speed = sqrt(vx ** 2 + vy ** 2)
-            θ = degrees(atan2(vy, vx)) if speed else 0.0
+    def drag_acceleration(self, C=0.47, S=None):
+        """Ускорение сопротивления воздуха: F = ½·C·ρ·S·v²"""
+        self.Vel._vector._ensure_polar()
+        speed, θ = self.Vel._vector.r, self.Vel._vector.θ
+
         if not speed:
             return Acceleration((0, 0))
         if S is None:
-            r = (3 * self.m._value / (4 * math.pi * self.ρ._value)) ** (1 / 3)  # радиус сферы
-            S = math.pi * r ** 2          # площадь сечения — ЧИСЛО, не объект Lenght
+            r = (3 * self.m._value / (4 * self.Model.π * self.ρ._value)) ** (1 / 3)
+            S = self.Model.π * r ** 2
         a = 0.5 * C * self.Model.ρ._value * S * speed ** 2 / self.m._value
-        θ_drag = (θ + 180) % 360          # противоположно скорости, а не отражение 360−θ
+        θ_drag = (θ + 180) % 360
         return Acceleration((a * cos(radians(θ_drag)), a * sin(radians(θ_drag))))
 
-    def net_acceleration(self, vel=None):
-        """Суммарное ускорение: приложенное + гравитация + сопротивление среды."""
-        return self.a + self.Model.g + self.drag_acceleration(vel=vel)
+    def Σ_a(self) -> Acceleration:
+        return self.a + self.Model.g + self.drag_acceleration()
 
-    def _update_impulse(self):
-        speed = self.Vel._value or 0
-        if speed:
-            self.p = Impulse([self.m._value * speed, self.Vel.θ])
-        else:
-            self.p = Impulse((0, 0))
 
     def time(self, dt=Time(1.0)):
-        """Шаг интегрирования: полунеявный Эйлер.
-        Сначала скорость (по ускорению начала шага), затем координаты — по УЖЕ новой скорости."""
         self.repair()
         t = dt._value if isinstance(dt, Time) else Time(dt)._value
-        acc = self.net_acceleration()
+        acc = self.Σ_a()
         self.Vel = self.Vel + Velocity((acc.x * t, acc.y * t))
         self.coordinates = self.coordinates + Position((self.Vel.x * t, self.Vel.y * t))
-        self._update_impulse()
+        self.p = self.Vel * self.m
         if self.Model.play:
             sleep(t / self.Model.speed)
 
@@ -399,13 +384,13 @@ class Body:
         сопротивлении это качественно точнее явного Эйлера."""
         self.repair()
         t = dt._value if isinstance(dt, Time) else Time(dt)._value
-        a1 = self.net_acceleration()
+        a1 = self.Σ_a()
         vx, vy = self.Vel.x, self.Vel.y
-        vxh, vyh = vx + a1.x * t / 2, vy + a1.y * t / 2          # скорость в середине шага
-        acc = self.net_acceleration(vel=(vxh, vyh))              # сопротивление по средней скорости
+        vxh, vyh = vx + a1.x * t / 2, vy + a1.y * t / 2
+        acc = self.Σ_a(vel=(vxh, vyh))
         self.Vel = self.Vel + Velocity((acc.x * t, acc.y * t))
         self.coordinates = self.coordinates + Position((vxh * t, vyh * t))
-        self._update_impulse()
+        self.p = self.Vel * self.m
         if self.Model.play:
             sleep(t / self.Model.speed)
 
@@ -413,15 +398,16 @@ class Body:
         self.coordinates = self.coordinates + Position((dx, dy))
 
     def copy(self):
-        """Копия: скаляры распаковываются до чисел, векторы копируются без мутации источника."""
         kw = {}
         for el in self.__el__:
             v = getattr(self, el)
             if getattr(v, 'format', '') == 'vector':
-                kw[el] = v            # конструктор обёртки сам делает копию вектора
+                kw[el] = v
             else:
                 kw[el] = v._value
-        return type(self)(**kw, model=self.Model)
+        result = type(self)(**kw, model=self.Model)
+        result.repair()
+        return result
 
     def __add__(self, other):
         if isinstance(other, Force):
@@ -444,19 +430,17 @@ class Body:
 
     @property
     def E_п(self):
-        """Потенциальная энергия относительно уровня y = 0 (без abs — ниже земли она отрицательна)."""
         return Energy(self.m._value * (-self.Model.g.y) * self.coordinates.y)
 
     @property
     def U(self):
-        """Внутренняя энергия: m·C·T."""
         return Energy(self.m._value * self.C._value * abs(self.temp))
 
 
 # ─────────────────────────────────── демонстрация ─────────────────────────────────
 
 if __name__ == '__main__':
-    Model(k=4, lang='ru', g=(0, -9.81), ρ=1.204, play=False, speed=1.0)
+    Model(k=4, lang='ru', ρ=1.204)
     sphere = Body(m=6, ρ=7850, temp=20, C=500)   # стальной шар
 
     c = 20        # количество траекторий
