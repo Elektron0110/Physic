@@ -319,7 +319,7 @@ def singleton(cls):
 
 @singleton
 class Model:
-    __el__ = ('k', 'lang', 'play', 'speed', 'g', 'ρ', 't')
+    __el__ = ('k', 'lang', 'g', 'ρ', 't')
 
     def __init__(self, k=5, lang: Literal['ru', 'en' ] = 'ru', g=[9.81, 270], ρ=1.204):
         self.k = k
