@@ -1,11 +1,32 @@
+"""Физика: физические величины с размерностями, векторы и моделирование движения тела
+с учётом сопротивления воздуха.
+
+Интеграторы:
+    time()    — полунеявный Эйлер (симплектический): сначала скорость, потом координаты;
+    time_rk2()— метод средней точки: ускорение пересчитывается по скорости в середине шага.
+Оба дают на порядок меньшую ошибку, чем явный Эйлер, при том же шаге.
+"""
 import math
-from typing import Self
-import operator
+from math import sqrt, sin, cos, atan2, radians, degrees, pi
+from time import sleep
+
 from my_lib.Python.new import *
 from my_lib.Python.new.Vectors import *
 import matplotlib.pyplot as plt
 
 Vect = Vector
+
+
+def _copy_vector(v: Vector) -> Vector:
+    """Копия вектора БЕЗ перевода исходника в другую систему координат."""
+    if v.x is not None:
+        return Vector((v.x, v.y))
+    if v.r is not None:
+        return Vector([v.r, v.θ if v.θ is not None else 0.0])
+    return Vector((0.0, 0.0))
+
+
+# ─────────────────────────────── скалярные величины ───────────────────────────────
 
 class Base:
     _value: float
@@ -23,6 +44,18 @@ class Base:
             return type(self)(self._value + value._value)
         return NotImplemented
     __radd__ = __add__
+
+    def __sub__(self, value):
+        if isinstance(value, (int, float)):
+            return type(self)(self._value - value)
+        if isinstance(value, type(self)):
+            return type(self)(self._value - value._value)
+        return NotImplemented
+
+    def __rsub__(self, value):
+        if isinstance(value, (int, float)):
+            return type(self)(value - self._value)
+        return NotImplemented
 
     def __mul__(self, value):
         if isinstance(value, (int, float)):
@@ -43,7 +76,7 @@ class Base:
         result = self.copy()
         if not isinstance(n, (int, float)):
             raise TypeError(f'Argument can not be {type(n).__name__} type')
-        result._value **= n 
+        result._value = result._value ** n 
         return result
 
     def __repr__(self) -> str:
@@ -56,10 +89,18 @@ class Base:
 
     def __round__(self, k: int | float = None):
         k = k if k else self.Model.k
-        return round(self._value, k) if self._value else 'None'
+        return round(self._value, k) if self._value is not None else 'None'
+
+    def __call__(self, value, model: 'Model' = None):
+        self._value = value
+        if model is not None:
+            self.Model = model
+        return self
 
 
-class Lenght(Base): dimension = {'ru': 'м', 'en': 'm'}
+class Lenght(Base):
+    dimension = {'ru': 'м', 'en': 'm'}
+
 
 class Energy(Base):
     dimension = {'ru': 'Дж', 'en': 'J'}
@@ -83,13 +124,9 @@ class Mass(Base):
     dimension = {'ru': 'кг', 'en': 'kg'}
 
     def __mul__(self, value):
-        if isinstance(value, (int, float)):
-            return Mass(self._value * value)
-        if isinstance(value, Mass):
-            return Mass(self._value * value._value)
         if isinstance(value, Acceleration):
-            return Force(self._value * value._value)
-        return NotImplemented
+            return Force((self._value * value.x, self._value * value.y))
+        return super().__mul__(value)
     __rmul__ = __mul__
 
     def __truediv__(self, value):
@@ -97,30 +134,24 @@ class Mass(Base):
             return Volume(self._value / value._value)
         if isinstance(value, Volume):
             return Density(self._value / value._value)
-        if isinstance(value, (int, float)):
-            return Mass(self._value / value)
-        if isinstance(value, Mass):
-            return Mass(self._value / value._value)
-        return NotImplemented
+        return super().__truediv__(value)
+
 
 class Volume(Base):
     dimension = {'ru': 'м³', 'en': 'm³'}
 
     def __truediv__(self, value):
-        if isinstance(value, (int, float)):
-            return Volume(self._value / value)
         if isinstance(value, Density):
             return Mass(self._value / value._value)
         if isinstance(value, Mass):
             return Density(self._value / value._value)
-        return NotImplemented
+        return super().__truediv__(value)
 
     def __pow__(self, n):
-        if not isinstance(n, (int, float)):
-            raise TypeError(f'Argument can not be {type(n).__name__} type')
-        result = Volume(self._value ** n)
-        if abs(n - 1/3) < 1e-9: return Lenght(result._value)
-        return result
+        # сравнение с допуском: 2/6, 0.333333 и 1/3 — это один и тот же кубический корень
+        if abs(n - 1 / 3) < 1e-4:   # ловит и 0.333333, и 2/6
+            return Lenght(self._value ** (1 / 3))
+        return super().__pow__(n)
 
 
 class Density(Base):
@@ -128,361 +159,334 @@ class Density(Base):
 
 
 class Specific_Heat(Base):
-    dimension = {'ru': 'Дж/(кг*°С)', 'en': 'J/(kg*°F)'}
+    dimension = {'ru': 'Дж/(кг*°С)', 'en': 'J/(kg*°C)'}
 
 
 class Time(Base):
     dimension = {'ru': 'с', 'en': 's'}
 
 
-class Vector(Base): 
-    _vector: Vect
-    dimension = {'ru': 'Векторная величина', 'en': 'Vector quantity'}
+# ─────────────────────────────── векторные величины ───────────────────────────────
+
+class VectPhysical:
+    """Обёртка над Vector: сложение/вычитание через компоненты, без мутации операндов."""
     format = 'vector'
 
-    def __init__(self, value=[0, 0], model: 'Model' = None):
+    def __init__(self, value=(0, 0), model: 'Model' = None):
         self.Model = model if model is not None else Model()
-        self._vector = Vect(value)
         self.__name__ = type(self).__name__
+        if isinstance(value, type(self)):
+            self._vector = _copy_vector(value._vector)
+        elif isinstance(value, Vector):
+            self._vector = _copy_vector(value)
+        elif isinstance(value, (tuple, list)) and len(value) == 2:
+            self._vector = Vector(value)      # tuple — декартовы, list — полярные [r, θ°]
+        else:
+            raise TypeError(f'Value must be tuple, list, Vector or {type(self).__name__}, '
+                            f'not {type(value).__name__}.')
 
     @property
     def x(self):
         self._vector._ensure_coord()
         return self._vector.x
+
     @property
     def y(self):
         self._vector._ensure_coord()
         return self._vector.y
 
     @property
+    def θ(self):
+        self._vector._ensure_polar()
+        return self._vector.θ
+
+    @property
     def _value(self):
+        """Модуль вектора (или None для нулевого)."""
         self._vector._ensure_polar()
         return self._vector.r if self._vector.r else None
 
     def __add__(self, value):
         if isinstance(value, type(self)):
-            return type(self)(self._vector + value._vector)
-        if isinstance(value, tuple):
-            value = Vect._coerce(value)
-        if isinstance(value, Vect):
-            return type(self)(self._vector + value)
-        return NotImplemented
+            other = value._vector
+        elif isinstance(value, Vector):
+            other = value
+        else:
+            return NotImplemented
+        self._vector._ensure_coord()
+        other._ensure_coord()
+        return type(self)((self._vector.x + other.x, self._vector.y + other.y))
     __radd__ = __add__
 
+    def __sub__(self, value):
+        if isinstance(value, type(self)):
+            other = value._vector
+        elif isinstance(value, Vector):
+            other = value
+        else:
+            return NotImplemented
+        self._vector._ensure_coord()
+        other._ensure_coord()
+        return type(self)((self._vector.x - other.x, self._vector.y - other.y))
+
+    def __neg__(self):
+        return type(self)((-self.x, -self.y))
+
+    def __mul__(self, value):
+        if isinstance(value, (int, float)):
+            k = value
+        elif isinstance(value, Base) and isinstance(value._value, (int, float)):
+            k = value._value
+        else:
+            return NotImplemented
+        return type(self)((self.x * k, self.y * k))
+    __rmul__ = __mul__
+
+    def __truediv__(self, value):
+        if isinstance(value, (int, float)):
+            k = value
+        elif isinstance(value, Base) and isinstance(value._value, (int, float)):
+            k = value._value
+        else:
+            return NotImplemented
+        return type(self)((self.x / k, self.y / k))
+
     def __repr__(self) -> str:
-        self._vector._ensure_polar()
-        return f'{round(self._value, self.Model.k) if self._value else self._value} {self.dimension[self.Model.lang]}'
+        mag = self._value
+        return (f'{round(mag, self.Model.k) if mag is not None else 0} '
+                f'{self.dimension[self.Model.lang]} | '
+                f'({round(self.x, self.Model.k)}; {round(self.y, self.Model.k)})')
 
     def copy(self):
-        self._vector._ensure_polar()
-        return type(self)([self._vector.r, self._vector.θ])
+        return type(self)(_copy_vector(self._vector))
 
-    def __pow__(self, n):
-        result = self
-        if not isinstance(n, (int, float)):
-            raise TypeError(f'Argument can not be {type(n).__name__} type')
-        if isinstance(n, float):
-            z = int(n)
-            a = n-z
-            b = a*10-a
-            c = round(9/b) # 1/c = a
-            d = round(z*c+1) # d/c = n
-            result = result ** d
-            result._ensure_polar()
-            result.θ /= c
-            result.r **=a
-            return result
-        if n < 0:
-            for _ in range(abs(n-1)):
-                result = result * self
-            return 1/result
-        for _ in range(n-1):
-            result = result * self
-        return result
 
-class Velocity(Vector):
+class Velocity(VectPhysical):
     dimension = {'ru': 'м/с', 'en': 'm/s'}
 
-    def __mul__(self, value) -> Type['Velocity'] | float:
-        if isinstance(value, Velocity):
-            return Velocity(self._vector * value._vector)
-        if isinstance(value, Vect):
-            return Velocity(self._vector * value)
-        if isinstance(value, Time):
-            return float(self._vector * value._value)
-        return NotImplemented
-    
-    __rmul__ = __mul__
 
-
-class Acceleration(Vector):
+class Acceleration(VectPhysical):
     dimension = {'ru': 'м/с²', 'en': 'm/s²'}
 
-    def __mul__(self, other) -> Type['Acceleration'] | Type['Velocity']:
-        if isinstance(other, Time):
-            c = self._vector
-            c._ensure_polar()
-            return Velocity([c.r*other._value, c.θ])
-        if isinstance(other, (Acceleration, Vect)):
-            c = self._vector
-            other = other._vector
-            c._ensure_polar()
-            other._ensure_polar()
-            return Acceleration([c.r*other.r, c.θ+other.θ])
-        elif isinstance(other, (int, float)):
-            return Acceleration(self._vector * other)
-    
-    __rmul__ = __mul__
+    def __mul__(self, value):
+        if isinstance(value, Time):
+            return Velocity((self.x * value._value, self.y * value._value))
+        return super().__mul__(value)
 
-class Force(Vector):
+
+class Force(VectPhysical):
     dimension = {'ru': 'Н', 'en': 'N'}
 
-    def __truediv__(self, _value) -> Type['Force'] | Type['Acceleration']:
-        if isinstance(_value, Mass):
-            self._vector._ensure_polar()
-            return Acceleration([self._vector.r / _value._value, self._vector.θ])
-        elif isinstance(_value, (int, float)) or isinstance(_value, Vect) or issubclass(type(_value), Vect):
-            _value = Vect()._coerce(_value)
-            self._vector._ensure_polar()
-            return Force(self._vector.r / _value)
 
-class Impulse(Vector):
-    dimension = {'ru': 'кг*м/с', 'en': 'kg*m/s'}
+class Impulse(VectPhysical):
+    dimension = {'ru': 'кг·м/с', 'en': 'kg·m/s'}   # импульс, а не ньютон
 
-    def __truediv__(self, _value) -> Type['Velocity'] | Type['Impulse']:
-        if isinstance(_value, Mass):
-            self._vector._ensure_polar()
-            return Velocity([self._vector.r / _value._value, self._vector.θ])
-        elif isinstance(_value, (int, float)) or isinstance(_value, Vect) or issubclass(type(_value), Vect):
-            _value = Vect()._coerce(_value)
-            self._vector._ensure_polar()
-            return Impulse(self._vector.r / _value)
+
+class Position(VectPhysical):
+    dimension = {'ru': 'м', 'en': 'm'}
+
+
+# ─────────────────────────────────── модель мира ──────────────────────────────────
+
+def singleton(cls):
+    """Честный синглтон: повторный вызов возвращает тот же экземпляр, а не пытается
+    вызвать объект как класс; повторные kwargs обновляют атрибуты."""
+    instance = None
+
+    def get(*args, **kwargs):
+        nonlocal instance
+        if instance is None:
+            instance = cls(*args, **kwargs)
+        elif kwargs:
+            for key, val in kwargs.items():
+                if key == 'g':
+                    instance.g = Acceleration(tuple(val), instance)
+                elif key == 'ρ':
+                    instance.ρ = Density(val, instance)
+                else:
+                    setattr(instance, key, val)
+        return instance
+    return get
 
 
 @singleton
 class Model:
-    π = 3.1415926535897
-    k, lang, g, ground, play, speed, ρ = 5, 'ru', Acceleration(
-        [9.81, -90], Self), 0, False, 1, Density(1.204, Self)
-    a = ('k', 'lang', 'g', 'ground', 'play', 'speed', 'ρ')
+    def __init__(self, k=5, lang='ru', g=(0, -9.81), ρ=1.204, play=False, speed=1.0):
+        self.k = k              # знаков после запятой при выводе
+        self.lang = lang        # 'ru' | 'en'
+        self.play = play        # анимировать шаги?
+        self.speed = speed      # множитель скорости анимации
+        self.π = math.pi
+        self.g = Acceleration(tuple(g), self)   # ускорение свободного падения
+        self.ρ = Density(ρ, self)               # плотность среды (воздух при 20 °C)
 
-    def __init__(self, **kwargs):
-        self.k = kwargs.get('k', 5)
-        self.g = Acceleration([kwargs.get('g', 9.81), -90], self)
-        self.speed = kwargs.get('speed', 1)
-        self.lang = kwargs.get('lang', 'ru')
-        self.ground = kwargs.get('ground', 0)
-        self.play = kwargs.get('play', False)
-        self.ρ = Density(kwargs.get('ρ', 1.204), self)
 
-    def __repr__(self) -> str:
-        parts = []
-        for a in self.a:
-            value = getattr(self, a)
-            if value is None or 'None' in str(value):
-                continue
-            parts.append(f'{a} = {value}')
-        return f'{type(self).__name__}({"; ".join(parts)})'
-
+# ───────────────────────────────────── тело ───────────────────────────────────────
 
 class Body:
-    m: Mass
-    ρ: Density
-    V: Volume
-    Vel: Velocity
-    temp: Temperature
-    C: Specific_Heat
-    coordinates: Vect
-    a: Acceleration
-    p: Impulse
     __el__ = ('m', 'ρ', 'V', 'temp', 'C', 'Vel', 'coordinates', 'a', 'p')
 
-    def __init__(self, model: Model = None, *args, **kwargs):
+    def __init__(self, m=1, ρ=None, V=None, temp=20, C=4186,
+                 Vel=None, coordinates=None, a=None, p=None, model: 'Model' = None):
         self.Model = model if model is not None else Model()
-        self.m: Mass = Mass(kwargs.get('m', 1))
-        self.ρ: Density = Density(kwargs.get('ρ'))
-        self.V: Volume = Volume(kwargs.get('V'))
-        self.Vel: Velocity = Velocity(kwargs.get('Vel', [0, 0]))
-        self.temp: Temperature = Temperature(kwargs.get('temp', 20))
-        self.C: Specific_Heat = Specific_Heat(kwargs.get('C'))
-        self.coordinates = Vect(kwargs.get('coordinates', (0, 0)))
-        self.a: Acceleration = Acceleration(kwargs.get('a', [0, 0]))
-        self.p: Impulse = Impulse(kwargs.get('p', [0, 0]))
-        self.__name__ = type(self).__name__
+        self.m = m if isinstance(m, Mass) else Mass(m)
+        self.ρ = ρ if isinstance(ρ, Density) else Density(ρ if ρ is not None else 1000)
+        self.V = V if isinstance(V, Volume) else Volume(self.m._value / self.ρ._value)
+        self.temp = temp if isinstance(temp, Temperature) else Temperature(temp)
+        self.C = C if isinstance(C, Specific_Heat) else Specific_Heat(C)
+        self.Vel = Vel if isinstance(Vel, Velocity) else Velocity(Vel if Vel else (0, 0))
+        self.coordinates = (coordinates if isinstance(coordinates, Position)
+                            else Position(coordinates if coordinates else (0, 0)))
+        self.a = a if isinstance(a, Acceleration) else Acceleration((0, 0))
+        self.p = p if isinstance(p, Impulse) else Impulse((0, 0))
 
-    def move(self, to=None, around=None):
-        if isinstance(to, tuple):
-            self.coordinates = Vect(to)
-        if isinstance(around, (tuple, Vect)):
-            self.coordinates += around
-        return
-
-    def __repr__(self) -> str:
-        self.repair()
-
-        parts = []
-        for a in self.__el__:
-            value = getattr(self, a)
-            if not value or 'None' in str(value):
+    def repair(self):
+        """Распаковывает вложенные обёртки значений (наследие старого copy)."""
+        for el in self.__el__:
+            attr = getattr(self, el, None)
+            if attr is None or getattr(attr, 'format', '') == 'vector':
                 continue
-            parts.append(f'{a} = {value}')
-        return f'{self.__name__}({"; ".join(parts)})'
+            value = getattr(attr, '_value', None)
+            if isinstance(value, Base):
+                while isinstance(value, Base):
+                    value = value._value
+                setattr(self, el, type(attr)(value))
 
-    @property
-    def E_п(self) -> Energy:
-        c = self.coordinates
-        c._ensure_coord()
-        return Energy(self.Model.g._value * abs(c.y - self.Model.ground) * self.m._value)
-
-    def __add__(self, _value) -> 'Body':
-        self.repair()
-
-        result = self
-        if isinstance(_value, Warmth):
-            if self.C._value is None or not self.m._value:
-                raise ValueError(
-                    'Необходимы масса и теплоёмкость, чтобы добавить тепло')
-            result.temp = self.temp + Temperature(
-                _value._value / (self.m._value * self.C._value))
-        elif isinstance(_value, Mass):
-            result.m = self.m + _value
-        elif isinstance(_value, Force):
-            result.a = self.a + (_value/self.m)
+    def drag_acceleration(self, C=0.47, S=None, vel=None):
+        """Ускорение сопротивления воздуха: F = ½·C·ρ·S·v², направлено ПРОТИВ скорости."""
+        if vel is None:
+            self.Vel._vector._ensure_polar()
+            speed, θ = self.Vel._vector.r, self.Vel._vector.θ
         else:
-            return NotImplemented
-        return result
-    __radd__ = __add__
+            vx, vy = vel
+            speed = sqrt(vx ** 2 + vy ** 2)
+            θ = degrees(atan2(vy, vx)) if speed else 0.0
+        if not speed:
+            return Acceleration((0, 0))
+        if S is None:
+            r = (3 * self.m._value / (4 * math.pi * self.ρ._value)) ** (1 / 3)  # радиус сферы
+            S = math.pi * r ** 2          # площадь сечения — ЧИСЛО, не объект Lenght
+        a = 0.5 * C * self.Model.ρ._value * S * speed ** 2 / self.m._value
+        θ_drag = (θ + 180) % 360          # противоположно скорости, а не отражение 360−θ
+        return Acceleration((a * cos(radians(θ_drag)), a * sin(radians(θ_drag))))
 
-    @property
-    def U(self) -> Energy:
-        t = self.temp._value
-        if self.Model.lang == 'en':
-            t = (t - 32) / 1.8
-        return Energy(self.m._value * self.C._value * t)
+    def net_acceleration(self, vel=None):
+        """Суммарное ускорение: приложенное + гравитация + сопротивление среды."""
+        return self.a + self.Model.g + self.drag_acceleration(vel=vel)
 
-    def time(self, time=Time(1.0)):
+    def _update_impulse(self):
+        speed = self.Vel._value or 0
+        if speed:
+            self.p = Impulse([self.m._value * speed, self.Vel.θ])
+        else:
+            self.p = Impulse((0, 0))
+
+    def time(self, dt=Time(1.0)):
+        """Шаг интегрирования: полунеявный Эйлер.
+        Сначала скорость (по ускорению начала шага), затем координаты — по УЖЕ новой скорости."""
         self.repair()
-
-        value = time if isinstance(time, Time) else Time(time)
-        drag = self.drag_acceleration()._vector
-        self.Vel._vector._ensure_coord()
-        self.coordinates._ensure_coord()
-        drag._ensure_coord()
-        self.coordinates.x += ((self.Vel._vector.x*value)._value + ((self.a.x+self.Model.g.x+drag.x)*value**2)/2)._value
-        self.coordinates.y += ((self.Vel._vector.y*value)._value + ((self.a.y+self.Model.g.y+drag.y)*value*value)/2)._value
-        self.Vel += (self.a+self.Model.g+drag)*value
-        self.p = Impulse([self.m._value * self.Vel._value, self.Vel._vector.θ])
+        t = dt._value if isinstance(dt, Time) else Time(dt)._value
+        acc = self.net_acceleration()
+        self.Vel = self.Vel + Velocity((acc.x * t, acc.y * t))
+        self.coordinates = self.coordinates + Position((self.Vel.x * t, self.Vel.y * t))
+        self._update_impulse()
         if self.Model.play:
-            sleep(time._value/self.Model.speed)
+            sleep(t / self.Model.speed)
+
+    def time_rk2(self, dt=Time(1.0)):
+        """Шаг интегрирования: метод средней точки (RK2).
+        Ускорение пересчитывается по скорости в СЕРЕДИНЕ шага — при квадратичном
+        сопротивлении это качественно точнее явного Эйлера."""
+        self.repair()
+        t = dt._value if isinstance(dt, Time) else Time(dt)._value
+        a1 = self.net_acceleration()
+        vx, vy = self.Vel.x, self.Vel.y
+        vxh, vyh = vx + a1.x * t / 2, vy + a1.y * t / 2          # скорость в середине шага
+        acc = self.net_acceleration(vel=(vxh, vyh))              # сопротивление по средней скорости
+        self.Vel = self.Vel + Velocity((acc.x * t, acc.y * t))
+        self.coordinates = self.coordinates + Position((vxh * t, vyh * t))
+        self._update_impulse()
+        if self.Model.play:
+            sleep(t / self.Model.speed)
+
+    def move(self, dx=0, dy=0):
+        self.coordinates = self.coordinates + Position((dx, dy))
 
     def copy(self):
-        self.repair()
-
+        """Копия: скаляры распаковываются до чисел, векторы копируются без мутации источника."""
         kw = {}
-        for e in self.__el__:
-            kw[e] = getattr(self, e)
-        return type(self)(**kw)
-
-    def drag_acceleration(self, C=0.47, S=None):
-        self.repair()
-
-        v = self.Vel._vector
-        v._ensure_coord()
-        speed = self.Vel._value
-
-        if not speed:
-            return Acceleration([0, 0])
-
-        if S is None:
-            r = (3*self.m/(4*self.Model.π*self.ρ)) ** (1/3)
-            S = self.Model.π * r._value**2
-
-        v._ensure_polar()
-        F = Force([0.5 * C * self.Model.ρ._value * S * speed**2, (v.θ + 180) % 360])
-        a: Acceleration = F / self.m
-        return a
-    
-    def repair(self):
         for el in self.__el__:
-            if hasattr(getattr(self, el), '_vector') or isinstance(getattr(self, el), Vect): continue
-            while isinstance(getattr(self, el)._value, Base):
-                setattr(self, el, getattr(self, el)._value)
+            v = getattr(self, el)
+            if getattr(v, 'format', '') == 'vector':
+                kw[el] = v            # конструктор обёртки сам делает копию вектора
+            else:
+                kw[el] = v._value
+        return type(self)(**kw, model=self.Model)
+
+    def __add__(self, other):
+        if isinstance(other, Force):
+            self.a = self.a + Acceleration((other.x / self.m._value, other.y / self.m._value))
+            return self
+        if isinstance(other, Warmth):
+            dT = other._value / (self.m._value * self.C._value)
+            self.temp = Temperature(self.temp._value + dT)
+            return self
+        if isinstance(other, Mass):
+            self.m = Mass(self.m._value + other._value)
+            self.V = Volume(self.m._value / self.ρ._value)
+            return self
+        return NotImplemented
+
+    def __repr__(self):
+        return (f'{type(self).__name__}: m = {self.m}, ρ = {self.ρ}, V = {self.V}, '
+                f'temp = {self.temp}, coordinates = ({round(self.coordinates.x, self.Model.k)}; '
+                f'{round(self.coordinates.y, self.Model.k)}) м, Vel = {self.Vel}, a = {self.a}')
+
+    @property
+    def E_п(self):
+        """Потенциальная энергия относительно уровня y = 0 (без abs — ниже земли она отрицательна)."""
+        return Energy(self.m._value * (-self.Model.g.y) * self.coordinates.y)
+
+    @property
+    def U(self):
+        """Внутренняя энергия: m·C·T."""
+        return Energy(self.m._value * self.C._value * abs(self.temp))
 
 
-def inter(x, y, z, w, step=1, start=-10, stop=10, finish: int = None, fix: int = None):
-    '''x.w при x.y(z(n)) где start < n < stop, но x.w > finish'''
-    original = x.copy()
+# ─────────────────────────────────── демонстрация ─────────────────────────────────
 
-    ns = [stop]
-    while start < stop:
-        ns.insert(1, start)
-        start += step
-    ns.sort()
-    rs = []
+if __name__ == '__main__':
+    Model(k=4, lang='ru', g=(0, -9.81), ρ=1.204, play=False, speed=1.0)
+    sphere = Body(m=6, ρ=7850, temp=20, C=500)   # стальной шар
 
-    if hasattr(getattr(original, y), 'format') and getattr(original, y).format == 'vector': ns = [[n, fix] for n in ns]
+    c = 20        # количество траекторий
+    ms = 0.05     # постоянный шаг интегрирования, с
+    v0 = 2500 / 3.6
 
-    for n in ns:
-        getattr(original, y)(z(n))
-        attrs = w.split('.')
-        value = original
-        for attr in attrs:
-            value = getattr(value, attr)
+    plt.figure(figsize=(10, 6))
+    for i in [90 / c * n for n in range(c + 1)]:
+        sphere.Vel = Velocity([v0, i])            # полярные координаты: [модуль, угол в градусах]
+        b = sphere.copy()
+        xs, ys = [b.coordinates.x], [b.coordinates.y]
+        for _ in range(2 * 10 ** 5):              # страховка от зависания
+            b.time_rk2(Time(ms))                  # всегда ОДИН И ТОТ ЖЕ шаг
+            xs.append(b.coordinates.x)
+            ys.append(b.coordinates.y)
+            if b.coordinates.y <= 0:
+                break
+        # доводим последнюю точку точно до земли (линейная интерполяция пересечения)
+        if ys[-1] < 0 and len(ys) > 1:
+            y0, y1 = ys[-2], ys[-1]
+            frac = y0 / (y0 - y1)
+            xs[-1] = xs[-2] + frac * (xs[-1] - xs[-2])
+            ys[-1] = 0.0
+        plt.plot(xs, ys, label=f'{round(i, 1)}°')
+        print(f'угол {round(i, 1):>5}°   дальность {round(xs[-1], 1):>9} м   '
+              f'время полёта {round(len(xs) * ms, 2)} с')
 
-        rs.append(value)
-        if finish is not None and value < finish:
-            ns = ns[:len(rs)]
-            break
-    if finish is not None:
-        return (ns, rs), n
-    return (ns, rs)
-
-
-def saw(x, y: str, z, w: str | tuple[str], step=1, start=-10, stop=10):
-    if isinstance(w, str):
-        w = (w, )
-    for kw in w:
-        data = inter(x, y, z, kw, step, start, stop)
-        plt.plot(*data)
-
-
-m = Model(lang='ru')
-sphere = Body(ρ=7850, C=500)
-
-print(sphere)					# 1
-sphere.move(around=(5, 5))
-print(sphere)					# 2
-print(sphere.E_п)				# 3
-sphere = sphere + Mass(5)
-print(sphere)					# 4
-Q = Warmth(10e-3 * 2.7e7)
-print(Q)						# 5
-sphere += Q
-print(sphere)					# 6
-print(sphere.U)					# 7
-launch = Velocity([2500/3.6, 30])
-print(launch)					# 8
-sphere.Vel = launch
-print(sphere)					# 9
-F = Force([50, 90])
-print(F)						# 10
-sphere += F
-print(sphere)					# 11
-
-msp = 1000
-mst = 0
-ms = 0.05
-c = 6
-
-for i in [90/c*n for n in range(c+1)]:
-    sphere.Vel = Velocity([2500/3.6, i])
-    y = inter(sphere, 'time', Time, 'coordinates.y', start=mst, stop=msp, step=ms, finish=0)
-    x = inter(sphere, 'time', Time, 'coordinates.x', start=mst, stop=y[1], step=ms)
-    plt.plot(x[1], y[0][1])
-plt.show()
-
-
-time = Time(1)
-print(time)						# 12
-sphere.time(time)
-print(sphere)					# 13
+    plt.xlabel('x, м')
+    plt.ylabel('y, м')
+    plt.title('Траектории с учётом сопротивления воздуха (RK2, шаг 0,05 с)')
+    plt.legend(title='угол запуска')
+    plt.grid(True)
+    plt.show()
