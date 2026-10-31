@@ -320,7 +320,7 @@ def singleton(cls):
 
 @singleton
 class Model:
-    __el__ = ('k', 'lang', 'play', 'speed', 'g', 'ρ')
+    __el__ = ('k', 'lang', 'play', 'speed', 'g', 'ρ', 't')
 
     def __init__(self, k=5, lang: Literal['ru', 'en' ] = 'ru', g=[9.81, 270], ρ=1.204, play=False, speed=1.0):
         self.k = k
@@ -330,6 +330,7 @@ class Model:
         self.π = 3.1415926535897
         self.g = Acceleration(g, self)
         self.ρ = Density(ρ, self)
+        self.t = Time(0, self)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({'; '.join([f'{el} = {getattr(self, el)}' for el in self.__el__ if getattr(self, el)])})"
@@ -344,7 +345,7 @@ Burning = lambda q=2.7e7, m=10e-3, η=1: Warmth(q*m*η)
 
 class Body:
     __el__ = ('m', 'ρ', 'V', 'temp', 'C', 'Vel', 'coordinates', 'a', 'p')
-    t = 0
+
     def __init__(self, m=1, ρ=None, V=None, temp=20, C=4200,
                  Vel=None, coordinates=None, a=None, p=None, model: 'Model' = None):
         self.Model = model if model is not None else Model()
@@ -411,14 +412,14 @@ class Body:
     def fly(self, duration=Time(1.0), Δt=0.05, stop=None):
         t_total = duration._value if isinstance(duration, Time) else duration
         n = int(t_total / Δt)
-        history = []
+        history = [(self.Model.t, self.coordinates.x, self.coordinates.y)]
         for _ in range(n):
             self.calc_rk2(Time(Δt))
-            history.append((self.t, self.coordinates.x, self.coordinates.y))
+            history.append((self.Model.t, self.coordinates.x, self.coordinates.y))
             if stop and stop(self):
                 history[-1] = self._interpolate_stop(history, Δt)
                 break
-            self.t += Δt
+            self.Model.t += Δt
         return history
 
     def _interpolate_stop(self, history, dt):
@@ -493,10 +494,12 @@ if __name__ == '__main__':
     print(sphere.E_п)					# 12
 
     c = 5         # количество траекторий
-    ms = 0.05     # постоянный шаг интегрирования, с
+    ms = 0.5     # постоянный шаг интегрирования, с
     v0 = 2500 / 3.6
 
     s = sphere.copy()
+
+    T = Model().t
     
     plt.figure(figsize=(10, 6))
     for i in [90 / c * n for n in range(c + 1)]:
@@ -505,6 +508,8 @@ if __name__ == '__main__':
         
         history = b.fly(duration=Time(120), Δt=ms, 
                        stop=lambda body: body.coordinates.y <= 0)
+
+        Model(t=T+history[-1][0])
         
         ts = [t for t, _, _ in history]
         xs = [x for _, x, _ in history]
@@ -517,3 +522,5 @@ if __name__ == '__main__':
     plt.legend(title='угол запуска')
     plt.grid(True)
     plt.show()
+
+    print(Model())						# 13
