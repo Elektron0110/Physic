@@ -393,20 +393,11 @@ class Body:
         return self.a + self.Model.g + self.drag_acceleration(vel=vel)
 
 
-    def time(self, dt=Time(1.0)):
+    def time(self, Δt=Time(1.0)):
         self.repair()
-        t = dt._value if isinstance(dt, Time) else Time(dt)._value
-        acc = self.Σ_a()
-        self.Vel = self.Vel + Velocity((acc.x * t, acc.y * t))
-        self.coordinates = self.coordinates + Position((self.Vel.x * t, self.Vel.y * t))
-        self.p = self.Vel * self.m
-        if self.Model.play:
-            sleep(t / self.Model.speed)
+        self.fly(Δt)
 
-    def time_rk2(self, dt=Time(1.0)):
-        """Шаг интегрирования: метод средней точки (RK2).
-        Ускорение пересчитывается по скорости в СЕРЕДИНЕ шага — при квадратичном
-        сопротивлении это качественно точнее явного Эйлера."""
+    def calc_rk2(self, dt=Time(1.0)):
         self.repair()
         t = dt._value if isinstance(dt, Time) else Time(dt)._value
         a1 = self.Σ_a()
@@ -416,20 +407,18 @@ class Body:
         self.Vel = self.Vel + Velocity((acc.x * t, acc.y * t))
         self.coordinates = self.coordinates + Position((vxh * t, vyh * t))
         self.p = self.Vel * self.m
-        if self.Model.play:
-            sleep(t / self.Model.speed)
 
-    def fly(self, duration=Time(1.0), dt=0.05, stop=None):
+    def fly(self, duration=Time(1.0), Δt=0.05, stop=None):
         t_total = duration._value if isinstance(duration, Time) else duration
-        n = int(t_total / dt)
+        n = int(t_total / Δt)
         history = []
         for _ in range(n):
-            self.time_rk2(Time(dt))
+            self.calc_rk2(Time(Δt))
             history.append((self.t, self.coordinates.x, self.coordinates.y))
             if stop and stop(self):
-                history[-1] = self._interpolate_stop(history, dt)
+                history[-1] = self._interpolate_stop(history, Δt)
                 break
-            self.t += dt
+            self.t += Δt
         return history
 
     def _interpolate_stop(self, history, dt):
@@ -459,8 +448,8 @@ class Body:
             self.a = self.a + Acceleration((other.x / self.m._value, other.y / self.m._value))
             return self
         if isinstance(other, Warmth):
-            dT = other._value / (self.m._value * self.C._value)
-            self.temp = Temperature(self.temp._value + dT)
+            ΔT = other._value / (self.m._value * self.C._value)
+            self.temp = Temperature(self.temp._value + ΔT)
             return self
         if isinstance(other, Mass):
             self.m = Mass(self.m._value + other._value)
@@ -514,9 +503,10 @@ if __name__ == '__main__':
         sphere.Vel = Velocity([v0, i])
         b = sphere.copy()
         
-        history = b.fly(duration=Time(120), dt=ms, 
+        history = b.fly(duration=Time(120), Δt=ms, 
                        stop=lambda body: body.coordinates.y <= 0)
         
+        ts = [t for t, _, _ in history]
         xs = [x for _, x, _ in history]
         ys = [y for _, _, y in history]
         plt.plot(xs, ys, label=f'{round(i, 1)}°')
