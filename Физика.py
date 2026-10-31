@@ -344,7 +344,7 @@ Burning = lambda q=2.7e7, m=10e-3, η=1: Warmth(q*m*η)
 
 class Body:
     __el__ = ('m', 'ρ', 'V', 'temp', 'C', 'Vel', 'coordinates', 'a', 'p')
-
+    t = 0
     def __init__(self, m=1, ρ=None, V=None, temp=20, C=4200,
                  Vel=None, coordinates=None, a=None, p=None, model: 'Model' = None):
         self.Model = model if model is not None else Model()
@@ -419,6 +419,26 @@ class Body:
         if self.Model.play:
             sleep(t / self.Model.speed)
 
+    def fly(self, duration=Time(1.0), dt=0.05, stop=None):
+        t_total = duration._value if isinstance(duration, Time) else duration
+        n = int(t_total / dt)
+        history = []
+        for _ in range(n):
+            self.time_rk2(Time(dt))
+            history.append((self.t, self.coordinates.x, self.coordinates.y))
+            if stop and stop(self):
+                history[-1] = self._interpolate_stop(history, dt)
+                break
+            self.t += dt
+        return history
+
+    def _interpolate_stop(self, history, dt):
+        x0, y0 = history[-2][1], history[-2][2]
+        x1, y1 = history[-1][1], history[-1][2]
+        frac = y0 / (y0 - y1)
+        x_land = x0 + frac * (x1 - x0)
+        return (history[-1][0] + frac * dt, x_land, 0.0)
+
     def move(self, dx=0, dy=0):
         self.coordinates = self.coordinates + Position((dx, dy))
 
@@ -487,23 +507,18 @@ if __name__ == '__main__':
     ms = 0.05     # постоянный шаг интегрирования, с
     v0 = 2500 / 3.6
 
+    s = sphere.copy()
+    
     plt.figure(figsize=(10, 6))
     for i in [90 / c * n for n in range(c + 1)]:
         sphere.Vel = Velocity([v0, i])
         b = sphere.copy()
-        xs, ys = [b.coordinates.x], [b.coordinates.y]
-        for _ in range(2 * 10 ** 5):
-            b.time_rk2(Time(ms))
-            xs.append(b.coordinates.x)
-            ys.append(b.coordinates.y)
-            if b.coordinates.y <= 0:
-                break
-        # доводим последнюю точку точно до земли (линейная интерполяция пересечения)
-        if ys[-1] < 0 and len(ys) > 1:
-            y0, y1 = ys[-2], ys[-1]
-            frac = y0 / (y0 - y1)
-            xs[-1] = xs[-2] + frac * (xs[-1] - xs[-2])
-            ys[-1] = 0.0
+        
+        history = b.fly(duration=Time(120), dt=ms, 
+                       stop=lambda body: body.coordinates.y <= 0)
+        
+        xs = [x for _, x, _ in history]
+        ys = [y for _, _, y in history]
         plt.plot(xs, ys, label=f'{round(i, 1)}°')
 
     plt.xlabel('x, м')
