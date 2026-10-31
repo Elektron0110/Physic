@@ -1,6 +1,5 @@
 import math
 from math import sqrt, sin, cos, atan2, radians, degrees, pi
-from time import sleep
 
 from my_lib.Python.new import *
 from my_lib.Python.new.Vectors import *
@@ -322,11 +321,9 @@ def singleton(cls):
 class Model:
     __el__ = ('k', 'lang', 'play', 'speed', 'g', 'ρ', 't')
 
-    def __init__(self, k=5, lang: Literal['ru', 'en' ] = 'ru', g=[9.81, 270], ρ=1.204, play=False, speed=1.0):
+    def __init__(self, k=5, lang: Literal['ru', 'en' ] = 'ru', g=[9.81, 270], ρ=1.204):
         self.k = k
         self.lang = lang
-        self.play = play
-        self.speed = speed
         self.π = 3.1415926535897
         self.g = Acceleration(g, self)
         self.ρ = Density(ρ, self)
@@ -397,6 +394,7 @@ class Body:
     def time(self, Δt=Time(1.0)):
         self.repair()
         self.fly(Δt)
+        self.Model.t += Δt
 
     def calc_rk2(self, dt=Time(1.0)):
         self.repair()
@@ -464,6 +462,14 @@ class Body:
     @property
     def E_п(self):
         return Energy(self.m._value * (-self.Model.g.y) * self.coordinates.y)
+
+    @property
+    def E_к(self):
+        return Energy(self.m._value * self.Vel._value**2 / 2)
+    
+    @property
+    def E_м(self):
+        return Energy(self.E_к._value + self.E_п._value)
 
     @property
     def U(self):
