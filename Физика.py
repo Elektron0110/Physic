@@ -6,6 +6,13 @@ from my_lib.Python.new import *
 from my_lib.Python.new.Vectors import *
 import matplotlib.pyplot as plt
 
+materials = {
+    'aqua': {'ρ': 1000, 'C': 4200},
+    'steel': {'ρ': 7850, 'C': 500},
+}
+fuel = {
+    'gas': 2.7e7,
+}
 
 def _copy_vector(v: Vector) -> Vector:
     if v.x is not None:
@@ -69,9 +76,7 @@ class Base:
         return result
 
     def __repr__(self) -> str:
-        if self._value is None:
-            return f'None {self.dimension[self.Model.lang]}'
-        return f'{round(self._value, self.Model.k)} {self.dimension[self.Model.lang]}'
+        return f'{round(self._value, self.Model.k) if self._value else None} {self.dimension[self.Model.lang]}'
 
     def copy(self):
         return type(self)(self._value)
@@ -79,6 +84,9 @@ class Base:
     def __round__(self, k: int | float = None):
         k = k if k else self.Model.k
         return round(self._value, k) if self._value is not None else 'None'
+    
+    def __bool__(self) -> bool:
+        return not 'None' in self.__repr__()
 
 
 class Lenght(Base):
@@ -238,10 +246,8 @@ class VectPhysical(Base):
         return type(self)((self.x / k, self.y / k))
 
     def __repr__(self) -> str:
-        mag = self._value
-        return (f'{round(mag, self.Model.k) if mag is not None else 0} '
-                f'{self.dimension[self.Model.lang]} | '
-                f'({round(self.x, self.Model.k)}; {round(self.y, self.Model.k)})')
+        return (f'{round(self._value, self.Model.k) if self._value else None} '
+                f'{self.dimension[self.Model.lang]}')
 
     def copy(self):
         return type(self)(_copy_vector(self._vector))
@@ -286,6 +292,10 @@ class Impulse(VectPhysical):
 class Position(VectPhysical):
     dimension = {'ru': 'м', 'en': 'm'}
 
+    def __repr__(self) -> str:
+        return (f'({round(self.x, self.Model.k)} {self.dimension[self.Model.lang]}, '
+                f'{round(self.y, self.Model.k)} {self.dimension[self.Model.lang]})')
+
 
 # ─────────────────────────────────── модель мира ──────────────────────────────────
 
@@ -310,14 +320,24 @@ def singleton(cls):
 
 @singleton
 class Model:
+    __el__ = ('k', 'lang', 'play', 'speed', 'g', 'ρ')
+
     def __init__(self, k=5, lang: Literal['ru', 'en' ] = 'ru', g=[9.81, 270], ρ=1.204, play=False, speed=1.0):
         self.k = k
         self.lang = lang
-        self.play = play        
+        self.play = play
         self.speed = speed
-        self.π = math.pi
-        self.g = Acceleration(tuple(g), self)
+        self.π = 3.1415926535897
+        self.g = Acceleration(g, self)
         self.ρ = Density(ρ, self)
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({'; '.join([f'{el} = {getattr(self, el)}' for el in self.__el__ if getattr(self, el)])})"
+
+
+# ─────────────────────────────────── процессы ─────────────────────────────────────
+
+Burning = lambda q=2.7e7, m=10e-3, η=1: Warmth(q*m*η)
 
 
 # ───────────────────────────────────── тело ───────────────────────────────────────
@@ -325,7 +345,7 @@ class Model:
 class Body:
     __el__ = ('m', 'ρ', 'V', 'temp', 'C', 'Vel', 'coordinates', 'a', 'p')
 
-    def __init__(self, m=1, ρ=None, V=None, temp=20, C=4186,
+    def __init__(self, m=1, ρ=None, V=None, temp=20, C=4200,
                  Vel=None, coordinates=None, a=None, p=None, model: 'Model' = None):
         self.Model = model if model is not None else Model()
         self.m = m if isinstance(m, Mass) else Mass(m)
@@ -350,10 +370,15 @@ class Body:
                     value = value._value
                 setattr(self, el, type(attr)(value))
 
-    def drag_acceleration(self, C=0.47, S=None):
+    def drag_acceleration(self, C=0.47, S=None, vel=None):
         """Ускорение сопротивления воздуха: F = ½·C·ρ·S·v²"""
-        self.Vel._vector._ensure_polar()
-        speed, θ = self.Vel._vector.r, self.Vel._vector.θ
+        if vel is None:
+            self.Vel._vector._ensure_polar()
+            speed, θ = self.Vel._vector.r, self.Vel._vector.θ
+        else:
+            vx, vy = vel
+            speed = sqrt(vx ** 2 + vy ** 2)
+            θ = degrees(atan2(vy, vx)) if speed else 0.0
 
         if not speed:
             return Acceleration((0, 0))
@@ -364,8 +389,8 @@ class Body:
         θ_drag = (θ + 180) % 360
         return Acceleration((a * cos(radians(θ_drag)), a * sin(radians(θ_drag))))
 
-    def Σ_a(self) -> Acceleration:
-        return self.a + self.Model.g + self.drag_acceleration()
+    def Σ_a(self, vel=None) -> Acceleration:
+        return self.a + self.Model.g + self.drag_acceleration(vel=vel)
 
 
     def time(self, dt=Time(1.0)):
@@ -423,10 +448,8 @@ class Body:
             return self
         return NotImplemented
 
-    def __repr__(self):
-        return (f'{type(self).__name__}: m = {self.m}, ρ = {self.ρ}, V = {self.V}, '
-                f'temp = {self.temp}, coordinates = ({round(self.coordinates.x, self.Model.k)}; '
-                f'{round(self.coordinates.y, self.Model.k)}) м, Vel = {self.Vel}, a = {self.a}')
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({'; '.join([f'{el} = {getattr(self, el)}' for el in self.__el__ if getattr(self, el)])})"
 
     @property
     def E_п(self):
@@ -441,19 +464,36 @@ class Body:
 
 if __name__ == '__main__':
     Model(k=4, lang='ru', ρ=1.204)
-    sphere = Body(m=6, ρ=7850, temp=20, C=500)   # стальной шар
+    print(Model())						# 1
+    print(Body())						# 2
+    sphere = Body(ρ=7850, C=500)
+    print(sphere)						# 3
+    m = Mass(5)
+    print(m)							# 4
+    sphere + m
+    print(sphere)						# 5
+    print(sphere.U)						# 6
+    Q = Burning(2.7e7, η=0.3)
+    print(Q)							# 7
+    sphere + Q
+    print(sphere)						# 8
+    print(sphere.U)						# 9
+    print(sphere.E_п)					# 10
+    sphere.move(5, 5)
+    print(sphere)						# 11
+    print(sphere.E_п)					# 12
 
-    c = 20        # количество траекторий
+    c = 5         # количество траекторий
     ms = 0.05     # постоянный шаг интегрирования, с
     v0 = 2500 / 3.6
 
     plt.figure(figsize=(10, 6))
     for i in [90 / c * n for n in range(c + 1)]:
-        sphere.Vel = Velocity([v0, i])            # полярные координаты: [модуль, угол в градусах]
+        sphere.Vel = Velocity([v0, i])
         b = sphere.copy()
         xs, ys = [b.coordinates.x], [b.coordinates.y]
-        for _ in range(2 * 10 ** 5):              # страховка от зависания
-            b.time_rk2(Time(ms))                  # всегда ОДИН И ТОТ ЖЕ шаг
+        for _ in range(2 * 10 ** 5):
+            b.time_rk2(Time(ms))
             xs.append(b.coordinates.x)
             ys.append(b.coordinates.y)
             if b.coordinates.y <= 0:
@@ -465,8 +505,6 @@ if __name__ == '__main__':
             xs[-1] = xs[-2] + frac * (xs[-1] - xs[-2])
             ys[-1] = 0.0
         plt.plot(xs, ys, label=f'{round(i, 1)}°')
-        print(f'угол {round(i, 1):>5}°   дальность {round(xs[-1], 1):>9} м   '
-              f'время полёта {round(len(xs) * ms, 2)} с')
 
     plt.xlabel('x, м')
     plt.ylabel('y, м')
