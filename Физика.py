@@ -321,13 +321,23 @@ def singleton(cls):
 class Model:
     __el__ = ('k', 'lang', 'g', 'ρ', 't')
     π = 3.1415926535897
+    G = 6.67430e-11 # 6,67430(15) · 10⁻¹¹
+    R = 6371e3
+    M = 5.9722e24
 
-    def __init__(self, k=5, lang: Literal['ru', 'en' ] = 'ru', g=[9.81, 270], ρ=1.204):
+    def __init__(self, k=5, lang: Literal['ru', 'en' ] = 'ru', g: Literal['[9.81, 270]']=None, ρ=1.204, b: 'Body' = None):
         self.k = k
+        self.b = b
         self.lang = lang
-        self.g = Acceleration(g, self)
+        self.g = Acceleration(g, self) if g else self.calc_g
         self.ρ = Density(ρ, self)
         self.t = Time(0, self)
+
+    @property
+    def calc_g(self):
+        Δr = self.b.coordinates.y if self.b else 0
+        g = self.G*self.M/(self.R+Δr)**2
+        return Acceleration([g, 270], self)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({'; '.join([f'{el} = {getattr(self, el)}' for el in self.__el__ if getattr(self, el)])})"
@@ -345,7 +355,7 @@ class Body:
 
     def __init__(self, m=1, ρ=None, V=None, temp=20, C=4200,
                  Vel=None, coordinates=None, a=None, p=None, model: 'Model' = None):
-        self.Model = model if model is not None else Model()
+        self.Model = model if model is not None else Model(b=self)
         self.m = m if isinstance(m, Mass) else Mass(m)
         self.ρ = ρ if isinstance(ρ, Density) else Density(ρ if ρ is not None else 1000)
         self.V = V if isinstance(V, Volume) else Volume(self.m._value / self.ρ._value)
@@ -410,17 +420,17 @@ class Body:
     def fly(self, duration=Time(-1), Δt=0.05, stop=None):
         t_total = duration._value if isinstance(duration, Time) else duration
         n = int(t_total / Δt)
-        history = [(self.Model.t, self.coordinates.x, self.coordinates.y)]
+        history = [(self.Model.t, self.coordinates.x, self.coordinates.y, self.Model.g)]
         if duration._value == -1:
             while self.coordinates.y > 0:
                 self.calc_rk2(Time(Δt))
-                history.append((self.Model.t, self.coordinates.x, self.coordinates.y))
+                history.append((self.Model.t, self.coordinates.x, self.coordinates.y, self.Model.g))
                 self.Model.t += Δt
             history[-1] = self._interpolate_stop(history, Δt)
             return history
         for _ in range(n):
             self.calc_rk2(Time(Δt))
-            history.append((self.Model.t, self.coordinates.x, self.coordinates.y))
+            history.append((self.Model.t, self.coordinates.x, self.coordinates.y, self.Model.g))
             if stop and stop(self):
                 history[-1] = self._interpolate_stop(history, Δt)
                 break
@@ -432,7 +442,7 @@ class Body:
         x1, y1 = history[-1][1], history[-1][2]
         frac = y0 / (y0 - y1)
         x_land = x0 + frac * (x1 - x0)
-        return (history[-1][0] + frac * dt, x_land, 0.0)
+        return (history[-1][0] + frac * dt, x_land, 0.0, self.Model.g)
 
     def move(self, dx=0, dy=0):
         self.coordinates = self.coordinates + Position((dx, dy))
@@ -523,13 +533,14 @@ if __name__ == '__main__':
 
         Model(t=T)
         
-        ts = [t._value for t, _, _ in history]
-        xs = [x for _, x, _ in history]
-        ys = [y for _, _, y in history]
-        plt.plot(xs, ys, label=f'{round(i, 1)}°')
+        ts = [t._value for t, _, _, _ in history]
+        xs = [x for _, x, _, _ in history]
+        ys = [y for _, _, y, _ in history]
+        gs = [g._value for _, _, _, g in history]
+        plt.plot(ts, gs, label=f'{round(i, 1)}°')
 
-    plt.xlabel('x, м')
-    plt.ylabel('y, м')
+    plt.xlabel('t, c')
+    plt.ylabel('g, м/c²')
     # plt.xlabel('t, c')
     # plt.ylabel('•, м')
     plt.title('Траектории с учётом сопротивления воздуха (RK2, шаг 0,05 с)')
