@@ -321,23 +321,26 @@ def singleton(cls):
 class Model:
     __el__ = ('k', 'lang', 'g', 'ρ', 't')
     π = 3.1415926535897
-    G = 6.67430e-11 # 6,67430(15) · 10⁻¹¹
+    G = 6.6743e-11 # 6,67430(15) · 10⁻¹¹
     R = 6371e3
     M = 5.9722e24
+
+    @property
+    def g(self):
+        Δr = self.b.coordinates.y if self.b else 0
+        return Acceleration([self.G*self.M/(self.R+Δr)**2, 270])
+
+    @g.setter
+    def g(self, value):
+        super().__setattr__('g', Acceleration([value, 270]) if isinstance(value, (float, int)) else value)
 
     def __init__(self, k=5, lang: Literal['ru', 'en' ] = 'ru', g: Literal['[9.81, 270]']=None, ρ=1.204, b: 'Body' = None):
         self.k = k
         self.b = b
         self.lang = lang
-        self.g = Acceleration(g, self) if g else self.calc_g
+        if g: self.g = Acceleration(g, self)
         self.ρ = Density(ρ, self)
         self.t = Time(0, self)
-
-    @property
-    def calc_g(self):
-        Δr = self.b.coordinates.y if self.b else 0
-        g = self.G*self.M/(self.R+Δr)**2
-        return Acceleration([g, 270], self)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({'; '.join([f'{el} = {getattr(self, el)}' for el in self.__el__ if getattr(self, el)])})"
@@ -422,11 +425,13 @@ class Body:
         n = int(t_total / Δt)
         history = [(self.Model.t, self.coordinates.x, self.coordinates.y, self.Model.g)]
         if duration._value == -1:
-            while self.coordinates.y > 0:
+            while True:                      # как do-while: хотя бы один шаг
                 self.calc_rk2(Time(Δt))
                 history.append((self.Model.t, self.coordinates.x, self.coordinates.y, self.Model.g))
                 self.Model.t += Δt
-            history[-1] = self._interpolate_stop(history, Δt)
+                if self.coordinates.y <= 0:
+                    history[-1] = self._interpolate_stop(history, Δt)
+                    break
             return history
         for _ in range(n):
             self.calc_rk2(Time(Δt))
@@ -438,6 +443,8 @@ class Body:
         return history
 
     def _interpolate_stop(self, history, dt):
+        if len(history) < 2:
+            return history[-1]
         x0, y0 = history[-2][1], history[-2][2]
         x1, y1 = history[-1][1], history[-1][2]
         frac = y0 / (y0 - y1)
@@ -496,7 +503,7 @@ class Body:
 # ─────────────────────────────────── демонстрация ─────────────────────────────────
 
 if __name__ == '__main__':
-    Model(k=4, lang='ru', ρ=0)
+    Model(k=4, lang='ru')
     print(Model())						# 1
     print(Body())						# 2
     sphere = Body(ρ=7850, C=500)
@@ -516,31 +523,30 @@ if __name__ == '__main__':
     print(sphere)						# 11
     print(sphere.E_п)					# 12
 
-    c = 5         # количество траекторий
-    ms = 0.5     # постоянный шаг интегрирования, с
+    c = 10         # количество траекторий
+    ms = 0.5       # постоянный шаг интегрирования, с
     v0 = 30000 / 3.6
 
-    s = sphere.copy()
-
     T = Model().t
+    C = sphere.coordinates
     
     plt.figure(figsize=(10, 6))
     for i in [90 / c * n for n in range(c + 1)]:
         sphere.Vel = Velocity([v0, i])
-        b = sphere.copy()
         
-        history = b.fly(Δt=ms, stop=lambda body: body.coordinates.y <= 0)
+        history = sphere.fly(Δt=ms, stop=lambda body: body.coordinates.y <= 0)
 
         Model(t=T)
+        sphere.coordinates = C
         
         ts = [t._value for t, _, _, _ in history]
         xs = [x for _, x, _, _ in history]
         ys = [y for _, _, y, _ in history]
         gs = [g._value for _, _, _, g in history]
-        plt.plot(ts, gs, label=f'{round(i, 1)}°')
+        plt.plot(xs, ys, label=f'{round(i, 1)}°')
 
-    plt.xlabel('t, c')
-    plt.ylabel('g, м/c²')
+    plt.xlabel('x, м')
+    plt.ylabel('y, м')
     # plt.xlabel('t, c')
     # plt.ylabel('•, м')
     plt.title('Траектории с учётом сопротивления воздуха (RK2, шаг 0,05 с)')
