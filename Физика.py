@@ -320,11 +320,11 @@ def singleton(cls):
 @singleton
 class Model:
     __el__ = ('k', 'lang', 'g', 'ρ', 't')
+    π = 3.1415926535897
 
     def __init__(self, k=5, lang: Literal['ru', 'en' ] = 'ru', g=[9.81, 270], ρ=1.204):
         self.k = k
         self.lang = lang
-        self.π = 3.1415926535897
         self.g = Acceleration(g, self)
         self.ρ = Density(ρ, self)
         self.t = Time(0, self)
@@ -407,10 +407,17 @@ class Body:
         self.coordinates = self.coordinates + Position((vxh * t, vyh * t))
         self.p = self.Vel * self.m
 
-    def fly(self, duration=Time(1.0), Δt=0.05, stop=None):
+    def fly(self, duration=Time(-1), Δt=0.05, stop=None):
         t_total = duration._value if isinstance(duration, Time) else duration
         n = int(t_total / Δt)
         history = [(self.Model.t, self.coordinates.x, self.coordinates.y)]
+        if duration._value == -1:
+            while self.coordinates.y > 0:
+                self.calc_rk2(Time(Δt))
+                history.append((self.Model.t, self.coordinates.x, self.coordinates.y))
+                self.Model.t += Δt
+            history[-1] = self._interpolate_stop(history, Δt)
+            return history
         for _ in range(n):
             self.calc_rk2(Time(Δt))
             history.append((self.Model.t, self.coordinates.x, self.coordinates.y))
@@ -479,7 +486,7 @@ class Body:
 # ─────────────────────────────────── демонстрация ─────────────────────────────────
 
 if __name__ == '__main__':
-    Model(k=4, lang='ru', ρ=1.204)
+    Model(k=4, lang='ru', ρ=0)
     print(Model())						# 1
     print(Body())						# 2
     sphere = Body(ρ=7850, C=500)
@@ -501,7 +508,7 @@ if __name__ == '__main__':
 
     c = 5         # количество траекторий
     ms = 0.5     # постоянный шаг интегрирования, с
-    v0 = 2500 / 3.6
+    v0 = 30000 / 3.6
 
     s = sphere.copy()
 
@@ -512,18 +519,19 @@ if __name__ == '__main__':
         sphere.Vel = Velocity([v0, i])
         b = sphere.copy()
         
-        history = b.fly(duration=Time(120), Δt=ms, 
-                       stop=lambda body: body.coordinates.y <= 0)
+        history = b.fly(Δt=ms, stop=lambda body: body.coordinates.y <= 0)
 
-        Model(t=T+history[-1][0])
+        Model(t=T)
         
-        ts = [t for t, _, _ in history]
+        ts = [t._value for t, _, _ in history]
         xs = [x for _, x, _ in history]
         ys = [y for _, _, y in history]
         plt.plot(xs, ys, label=f'{round(i, 1)}°')
 
     plt.xlabel('x, м')
     plt.ylabel('y, м')
+    # plt.xlabel('t, c')
+    # plt.ylabel('•, м')
     plt.title('Траектории с учётом сопротивления воздуха (RK2, шаг 0,05 с)')
     plt.legend(title='угол запуска')
     plt.grid(True)
