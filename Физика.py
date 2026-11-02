@@ -339,14 +339,17 @@ class Model:
 
     @property
     def ρ(self):
+        H = 8500
         if self.__ρ__: return self.__ρ__
         print(self.b)
+        Δh = self.b.coordinates.y if self.b else 0
+        return Density(1.204*math.exp(-Δh/H)) # ρ(h)=ρ_0e^(−h/H)
 
     @ρ.setter
     def ρ(self, value):
         self.__ρ__ = Density(value) if isinstance(value, (float, int)) else value
 
-    def __init__(self, k=5, lang: Literal['ru', 'en' ] = 'ru', g: Literal['[9.81, 270]']=None, ρ=1.204, b: 'Body' = None):
+    def __init__(self, k=5, lang: Literal['ru', 'en' ] = 'ru', g: Literal['[9.81, 270]']=None, ρ:Literal['1.204']=None, b: 'Body' = None):
         self.k = k
         self.b = b
         self.lang = lang
@@ -567,3 +570,4 @@ if __name__ == '__main__':
     plt.show()
 
     print(Model())						# 13
+#"""
