@@ -353,8 +353,8 @@ class Model:
         self.k = k
         self.b = b
         self.lang = lang
-        if g: self.g = Acceleration(g, self)
-        if ρ: self.ρ = Density(ρ, self)
+        if g is not None: self.g = Acceleration(g, self)
+        if ρ is not None: self.ρ = Density(ρ, self)
         self.t = Time(0, self)
 
     def __repr__(self) -> str:
