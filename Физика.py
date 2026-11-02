@@ -5,6 +5,7 @@ from my_lib.Python.new import *
 from my_lib.Python.new.Vectors import *
 import matplotlib.pyplot as plt
 
+Model_constants = dict(ρ = 1.204, g = [9.81, 270])
 materials = {
     'aqua': {'ρ': 1000, 'C': 4200},
     'steel': {'ρ': 7850, 'C': 500},
@@ -308,7 +309,7 @@ def singleton(cls):
         elif kwargs:
             for key, val in kwargs.items():
                 if key == 'g':
-                    instance.g = Acceleration(tuple(val), instance)
+                    instance.g = Acceleration(val, instance) if isinstance(val, (tuple, list)) else val
                 elif key == 'ρ':
                     instance.ρ = Density(val, instance)
                 else:
@@ -341,7 +342,6 @@ class Model:
     def ρ(self):
         H = 8500
         if self.__ρ__: return self.__ρ__
-        print(self.b)
         Δh = self.b.coordinates.y if self.b else 0
         return Density(1.204*math.exp(-Δh/H)) # ρ(h)=ρ_0e^(−h/H)
 
@@ -518,6 +518,8 @@ class Body:
 # ─────────────────────────────────── демонстрация ─────────────────────────────────
 
 if __name__ == '__main__':
+#"""
+    Model(**Model_constants)
     Model(k=4, lang='ru')
     print(Model())						# 1
     print(Body())						# 2
