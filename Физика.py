@@ -321,6 +321,7 @@ def singleton(cls):
 class Model:
     __el__ = ('k', 'lang', 'g', 'ρ', 't')
     __g__: Acceleration = None
+    __ρ__: Density = None
     π = 3.1415926535897
     G = 6.6743e-11 # 6,67430(15) · 10⁻¹¹
     R = 6371e3
@@ -336,12 +337,21 @@ class Model:
     def g(self, value):
         self.__g__ = Acceleration([value, 270]) if isinstance(value, (float, int)) else value
 
+    @property
+    def ρ(self):
+        if self.__ρ__: return self.__ρ__
+        print(self.b)
+
+    @ρ.setter
+    def ρ(self, value):
+        self.__ρ__ = Density(value) if isinstance(value, (float, int)) else value
+
     def __init__(self, k=5, lang: Literal['ru', 'en' ] = 'ru', g: Literal['[9.81, 270]']=None, ρ=1.204, b: 'Body' = None):
         self.k = k
         self.b = b
         self.lang = lang
         if g: self.g = Acceleration(g, self)
-        self.ρ = Density(ρ, self)
+        if ρ: self.ρ = Density(ρ, self)
         self.t = Time(0, self)
 
     def __repr__(self) -> str:
