@@ -320,6 +320,7 @@ def singleton(cls):
 @singleton
 class Model:
     __el__ = ('k', 'lang', 'g', 'ρ', 't')
+    __g__: Acceleration = None
     π = 3.1415926535897
     G = 6.6743e-11 # 6,67430(15) · 10⁻¹¹
     R = 6371e3
@@ -327,12 +328,13 @@ class Model:
 
     @property
     def g(self):
+        if self.__g__: return self.__g__
         Δr = self.b.coordinates.y if self.b else 0
         return Acceleration([self.G*self.M/(self.R+Δr)**2, 270])
 
     @g.setter
     def g(self, value):
-        super().__setattr__('g', Acceleration([value, 270]) if isinstance(value, (float, int)) else value)
+        self.__g__ = Acceleration([value, 270]) if isinstance(value, (float, int)) else value
 
     def __init__(self, k=5, lang: Literal['ru', 'en' ] = 'ru', g: Literal['[9.81, 270]']=None, ρ=1.204, b: 'Body' = None):
         self.k = k
