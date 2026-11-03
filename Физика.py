@@ -330,7 +330,7 @@ class Model:
 
     @property
     def g(self):
-        if self.__g__: return self.__g__
+        if self.__g__ is not None: return self.__g__
         Δr = self.b.coordinates.y if self.b else 0
         return Acceleration([self.G*self.M/(self.R+Δr)**2, 270])
 
@@ -341,7 +341,7 @@ class Model:
     @property
     def ρ(self):
         H = 8500
-        if self.__ρ__: return self.__ρ__
+        if self.__ρ__ is not None: return self.__ρ__
         Δh = self.b.coordinates.y if self.b else 0
         return Density(1.204*math.exp(-Δh/H)) # ρ(h)=ρ_0e^(−h/H)
 
@@ -519,8 +519,7 @@ class Body:
 
 if __name__ == '__main__':
 #"""
-    Model(**Model_constants)
-    Model(k=4, lang='ru')
+    Model(k=4, lang='ru', g=[9.81,270], ρ=0)
     print(Model())						# 1
     print(Body())						# 2
     sphere = Body(ρ=7850, C=500)
