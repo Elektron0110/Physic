@@ -364,6 +364,8 @@ class Model:
 # ─────────────────────────────────── процессы ─────────────────────────────────────
 
 Burning = lambda q=2.7e7, m=10e-3, η=1: Warmth(q*m*η)
+Fall = lambda body: body.coordinates.y <= 0
+Apogee = lambda body: body.Vel.y < 0
 
 
 # ───────────────────────────────────── тело ───────────────────────────────────────
@@ -550,7 +552,7 @@ if __name__ == '__main__':
     for i in [90 / c * n for n in range(c + 1)]:
         sphere.Vel = Velocity([v0, i])
         
-        history = sphere.fly(Δt=ms, stop=lambda body: body.coordinates.y <= 0)
+        history = sphere.fly(Δt=ms, stop=Fall)
 
         Model(t=T)
         sphere.coordinates = C
