@@ -519,7 +519,7 @@ class Body:
 
 if __name__ == '__main__':
 #"""
-    Model(k=4, lang='ru', g=[9.81,270], ρ=0)
+    Model(k=4, lang='ru') #, g=[9.81,270], ρ=0)
     print(Model())						# 1
     print(Body())						# 2
     sphere = Body(ρ=7850, C=500)
@@ -541,7 +541,7 @@ if __name__ == '__main__':
 
     c = 5         # количество траекторий
     ms = 0.05     # постоянный шаг интегрирования, с
-    v0 = 30000 / 3.6
+    v0 = 2500 / 3.6
 
     T = Model().t
     C = sphere.coordinates
