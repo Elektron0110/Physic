@@ -524,7 +524,7 @@ if __name__ == '__main__':
     Model(k=4, lang='ru') #, g=[9.81,270], ρ=0)
     print(Model())						# 1
     print(Body())						# 2
-    sphere = Body(ρ=7850, C=500)
+    sphere = Body(**materials['steel'])
     print(sphere)						# 3
     m = Mass(5)
     print(m)							# 4
