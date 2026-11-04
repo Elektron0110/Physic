@@ -89,7 +89,7 @@ class Base:
         return not 'None' in self.__repr__()
 
 
-class Lenght(Base):
+class Length(Base):
     dimension = {'ru': 'м', 'en': 'm'}
 
 
@@ -140,7 +140,7 @@ class Volume(Base):
 
     def __pow__(self, n):
         if abs(n - 1 / 3) < 1e-4:
-            return Lenght(self._value ** (1 / 3))
+            return Length(self._value ** (1 / 3))
         return super().__pow__(n)
 
 
@@ -258,7 +258,7 @@ class Velocity(VectPhysical):
 
     def __mul__(self, value):
         if isinstance(value, Time):
-            return Velocity((self.x * value._value, self.y * value._value))
+            return Length((self.x * value._value, self.y * value._value))
         return super().__mul__(value)
 
 
